@@ -36,13 +36,6 @@ const formSchema = z.object({
 
 export function CreateWorkflow() {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const createWorkflow = api.workflow.create.useMutation({
-    onSuccess: () => {
-      router.refresh();
-      setName("");
-    },
-  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -53,6 +46,13 @@ export function CreateWorkflow() {
     },
   });
 
+  const createWorkflow = api.workflow.create.useMutation({
+    onSuccess: () => {
+      router.refresh();
+      form.reset();
+    },
+  });
+
   function onSubmit(values: z.infer<typeof formSchema>) {
     createWorkflow.mutate({
       name: values.name,
@@ -60,13 +60,6 @@ export function CreateWorkflow() {
       apiKey: values.apiKey,
     });
   }
-
-  const createPost = api.workflow.createPost.useMutation({
-    onSuccess: () => {
-      router.refresh();
-      setName("");
-    },
-  });
 
   return (
     <>
