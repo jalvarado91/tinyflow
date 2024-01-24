@@ -97,19 +97,24 @@ const getLayoutedElements = (
     },
     string | undefined
   >[],
-  edges: Edge<any>[],
+  edges: Edge[],
 ) => {
   g.setGraph({ rankdir: "LR" });
 
   edges.forEach((edge) => g.setEdge(edge.source, edge.target));
-  nodes.forEach((node) => g.setNode(node.id, node));
+  nodes.forEach((node) =>
+    g.setNode(node.id, {
+      label: node.data.label,
+      width: node.width!,
+      height: node.height!,
+    }),
+  );
 
   Dagre.layout(g);
 
   return {
     nodes: nodes.map((node) => {
       const { x, y } = g.node(node.id);
-
       return { ...node, position: { x, y } };
     }),
     edges,
@@ -159,7 +164,7 @@ export function LayoutFlow() {
       fitView
     >
       <Panel position="top-right">
-        <button onClick={() => onLayout()}>horizontal layout</button>
+        <button onClick={() => onLayout()}>Cleanup Layout</button>
       </Panel>
       <Background />
       <Controls />
