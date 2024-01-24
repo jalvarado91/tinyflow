@@ -1,15 +1,67 @@
 "use client";
 
+import { Label } from "@radix-ui/react-label";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "~/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
+import { Input } from "~/components/ui/input";
 
 import { api } from "~/trpc/react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "~/components/ui/form";
 
-export function CreatePost() {
+const formSchema = z.object({
+  name: z.string().min(2),
+  projectId: z.string().min(1),
+  apiKey: z.string().min(1),
+});
+
+export function CreateWorkflow() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const createWorkflow = api.workflow.create.useMutation({
+    onSuccess: () => {
+      router.refresh();
+      setName("");
+    },
+  });
 
-  const createPost = api.workflow.create.useMutation({
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+      projectId: "",
+      apiKey: "",
+    },
+  });
+
+  function onSubmit(values: z.infer<typeof formSchema>) {
+    createWorkflow.mutate({
+      name: values.name,
+      projectId: values.projectId,
+      apiKey: values.apiKey,
+    });
+  }
+
+  const createPost = api.workflow.createPost.useMutation({
     onSuccess: () => {
       router.refresh();
       setName("");
@@ -17,27 +69,82 @@ export function CreatePost() {
   });
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        createPost.mutate({ name });
-      }}
-      className="flex flex-col gap-2"
-    >
-      <input
-        type="text"
-        placeholder="Title"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="w-full rounded-full px-4 py-2 text-black"
-      />
-      <button
-        type="submit"
-        className="rounded-full bg-white/10 px-10 py-3 font-semibold transition hover:bg-white/20"
-        disabled={createPost.isLoading}
-      >
-        {createPost.isLoading ? "Submitting..." : "Submit"}
-      </button>
-    </form>
+    <>
+      <Card className="w-full max-w-md">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <CardHeader>
+              <CardTitle>Create a workflow</CardTitle>
+              <CardDescription>
+                To create a workflow we'll need to setup a couple things first
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="LLM Question Answering"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        A friendly name for your workflow
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="projectId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Project Id</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        The railway project id where resources will be created
+                        in
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="apiKey"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Api Key</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormDescription>Your railway API Key</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button
+                type="submit"
+                disabled={createWorkflow.isLoading}
+                className="w-full"
+              >
+                {createWorkflow.isLoading ? "Creating workflow" : "Create"}
+              </Button>
+            </CardFooter>
+          </form>
+        </Form>
+      </Card>
+    </>
   );
 }

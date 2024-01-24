@@ -9,6 +9,7 @@
 import { initTRPC } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
+import { createDbConnection } from "../db/db";
 
 /**
  * 1. CONTEXT
@@ -23,7 +24,9 @@ import { ZodError } from "zod";
  * @see https://trpc.io/docs/server/context
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
+  const db = await createDbConnection();
   return {
+    db,
     ...opts,
   };
 };
