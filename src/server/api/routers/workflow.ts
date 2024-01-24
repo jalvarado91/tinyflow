@@ -7,7 +7,7 @@ let post = {
   name: "Hello World",
 };
 
-export const postRouter = createTRPCRouter({
+export const workflowRouter = createTRPCRouter({
   hello: publicProcedure
     .input(z.object({ text: z.string() }))
     .query(({ input }) => {
