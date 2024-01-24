@@ -76,7 +76,9 @@ export function CreateWorkflow() {
             <CardHeader>
               <CardTitle>Create a workflow</CardTitle>
               <CardDescription>
-                To create a workflow we'll need to setup a couple things first
+                {
+                  "To create a workflow we'll need to setup a couple things first"
+                }
               </CardDescription>
             </CardHeader>
             <CardContent>
