@@ -2,9 +2,31 @@ import { z } from "zod";
 import { ulid } from "ulid";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { type Db } from "mongodb";
+import { env } from "~/env";
+import { createProjectWebhook } from "~/server/railway-client";
 
 function workFlowId() {
   return `wf_${ulid()}`;
+}
+
+function workFlowNodeId() {
+  return `wfn_${ulid()}`;
+}
+
+interface WorkflowNode {
+  publicId: string;
+  name: string;
+  createdAt: Date;
+  updatedAt: Date;
+  container_image?: string;
+  variables: Array<{ name: string; value: string }>;
+  // input_node_ids: Array<string>
+}
+
+interface WorkflowEdge {
+  publicId: string;
+  source: string;
+  target: string;
 }
 
 interface Workflow {
@@ -14,6 +36,7 @@ interface Workflow {
   projectId: string;
   name: string;
   apiKey: string;
+  nodes: Array<WorkflowNode>;
 }
 
 export type WorkFlowProjection = ReturnType<typeof workFlowProjection>;
@@ -25,6 +48,14 @@ function workFlowProjection(wf: Workflow) {
     projectId: wf.projectId,
     name: wf.name,
     apiKey: wf.apiKey,
+    nodes: wf.nodes.map((n) => ({
+      publicId: n.publicId,
+      name: n.name,
+      createdAt: n.createdAt,
+      updatedAt: n.updatedAt,
+      containerImage: n.container_image,
+      variables: n.variables,
+    })),
   } as const;
 }
 
@@ -47,6 +78,15 @@ async function createWorkflow(
     projectId: projectId,
     name: name,
     apiKey: apiKey,
+    nodes: [
+      {
+        name: "",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        publicId: workFlowNodeId(),
+        variables: [],
+      },
+    ],
   } satisfies Workflow;
 
   const collection = db.collection<Workflow>("workflow");
@@ -60,6 +100,15 @@ async function createWorkflow(
       `Couldn't create workflow ${name} for project ${projectId}`,
     );
   }
+
+  const webhookUrl = `${env.PUBLIC_URL}/api/webhooks/railway/${nWf.publicId}`;
+  const createWebhookRes = await createProjectWebhook(
+    nWf.apiKey,
+    nWf.projectId,
+    webhookUrl,
+  );
+
+  console.log({ webhookUrl, createWebhookRes });
 
   return nWf;
 }

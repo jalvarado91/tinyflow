@@ -47,7 +47,6 @@ export function CreateWorkflow() {
   const createWorkflow = api.workflow.create.useMutation({
     onSuccess: () => {
       router.refresh();
-      form.reset();
     },
   });
 
@@ -117,7 +116,7 @@ export function CreateWorkflow() {
                     <FormItem>
                       <FormLabel>Api Key</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input autoComplete="off" {...field} />
                       </FormControl>
                       <FormDescription>Your railway API Key</FormDescription>
                       <FormMessage />
