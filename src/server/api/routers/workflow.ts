@@ -3,11 +3,6 @@ import { ulid } from "ulid";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { type Db } from "mongodb";
 
-let post = {
-  id: 1,
-  name: "Hello World",
-};
-
 function workFlowId() {
   return `wf_${ulid()}`;
 }
@@ -66,7 +61,7 @@ async function createWorkflow(
     );
   }
 
-  return workFlowProjection(nWf);
+  return nWf;
 }
 
 async function getWorkFlow(db: Db, publicId: string) {
@@ -79,7 +74,7 @@ async function getWorkFlow(db: Db, publicId: string) {
     throw new Error(`Couldn't find workflow with publicId: ${publicId}`);
   }
 
-  return workFlowProjection(nWf);
+  return nWf;
 }
 
 async function getLatestWorkflow(db: Db) {
@@ -94,17 +89,10 @@ async function getLatestWorkflow(db: Db) {
     throw new Error(`Couldn't find latest workflow`);
   }
 
-  return workFlowProjection(res[0]);
+  return res[0];
 }
 
 export const workflowRouter = createTRPCRouter({
-  hello: publicProcedure
-    .input(z.object({ text: z.string() }))
-    .query(({ input }) => {
-      return {
-        greeting: `Hello ${input.text}`,
-      };
-    }),
   create: publicProcedure
     .input(
       z.object({
@@ -114,41 +102,28 @@ export const workflowRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const workFlow = await createWorkflow(ctx.db, {
+      const wf = await createWorkflow(ctx.db, {
         name: input.name,
         projectId: input.projectId,
         apiKey: input.apiKey,
       });
 
-      return workFlow;
+      return workFlowProjection(wf);
     }),
   getByPublicId: publicProcedure
     .input(z.object({ publicId: z.string() }))
     .query(async ({ input, ctx }) => {
       const wf = await getWorkFlow(ctx.db, input.publicId);
-      return wf;
+      return workFlowProjection(wf);
     }),
   getLatest: publicProcedure.query(async ({ ctx }) => {
     const wf = await getLatestWorkflow(ctx.db);
-    return wf;
+    return workFlowProjection(wf);
   }),
   workflowCount: publicProcedure.query(async ({ ctx }) => {
     const db = ctx.db;
     const collection = db.collection<Workflow>("workflow");
     const count = await collection.countDocuments();
     return { count };
-  }),
-  createPost: publicProcedure
-    .input(z.object({ name: z.string().min(1) }))
-    .mutation(async ({ input, ctx }) => {
-      // simulate a slow db call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      post = { id: post.id + 1, name: input.name };
-      return post;
-    }),
-
-  getLatestPost: publicProcedure.query(() => {
-    return post;
   }),
 });

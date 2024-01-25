@@ -39,7 +39,6 @@ async function WorkflowView() {
             Edit or execute your workflow
           </p>
         </div>
-        {/* <div className="flex h-full flex-grow-0 flex-col"> */}
         <div className="flex h-full flex-col gap-3 pt-4">
           <h2 className="flex-grow-0 px-4 text-xs font-semibold text-slate-800">
             EXECUTION HISTORY
