@@ -31,15 +31,15 @@ async function WorkflowView() {
     isLoading: false,
   };
   return (
-    <main className="flex h-full min-h-screen w-screen">
+    <main className="flex h-full min-h-screen w-screen bg-white">
       <div className="grid h-full max-w-md flex-1 flex-shrink-0 grid-cols-1 grid-rows-[auto_minmax(0px,_1fr)] shadow">
-        <div className="flex-grow-0 flex-col border-b bg-white px-4 py-4">
+        <div className="b flex-grow-0 flex-col border px-4 py-4">
           <h2 className="text-xl font-semibold">{wf.name}</h2>
           <p className="text-sm text-muted-foreground">
             Edit or execute your workflow
           </p>
         </div>
-        <div className="flex h-full flex-col gap-3 pt-4">
+        <div className="flex h-full flex-col gap-3 border pt-4">
           <h2 className="flex-grow-0 px-4 text-xs font-semibold text-slate-800">
             EXECUTION HISTORY
           </h2>
@@ -60,7 +60,6 @@ async function WorkflowView() {
               })}
             </div>
           </ScrollArea>
-          {/* </div> */}
         </div>
         <div className="flex flex-col ">
           <div className="flex-shrink-0 bg-slate-50 py-4 shadow-inner">
@@ -80,7 +79,7 @@ async function WorkflowView() {
         </div>
       </div>
       <div className="flex flex-1">
-        <FlowBoard />
+        <FlowBoard workflowNodes={wf.nodes} />
       </div>
     </main>
   );

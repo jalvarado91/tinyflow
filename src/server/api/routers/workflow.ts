@@ -18,8 +18,10 @@ interface WorkflowNode {
   name: string;
   createdAt: Date;
   updatedAt: Date;
-  container_image?: string;
+  containerImage?: string;
   variables: Array<{ name: string; value: string }>;
+  isRoot: boolean;
+  hasInput: boolean;
   // input_node_ids: Array<string>
 }
 
@@ -39,8 +41,10 @@ interface Workflow {
   nodes: Array<WorkflowNode>;
 }
 
-export type WorkFlowProjection = ReturnType<typeof workFlowProjection>;
-function workFlowProjection(wf: Workflow) {
+export type WorkflowProjection = ReturnType<typeof workflowProjection>;
+export type WorkflowNodeProjection = WorkflowProjection["nodes"][0];
+
+function workflowProjection(wf: Workflow) {
   return {
     publicId: wf.publicId,
     createdAt: wf.createdAt,
@@ -53,7 +57,9 @@ function workFlowProjection(wf: Workflow) {
       name: n.name,
       createdAt: n.createdAt,
       updatedAt: n.updatedAt,
-      containerImage: n.container_image,
+      isRoot: n.isRoot,
+      hasInput: n.hasInput,
+      containerImage: n.containerImage,
       variables: n.variables,
     })),
   } as const;
@@ -80,10 +86,21 @@ async function createWorkflow(
     apiKey: apiKey,
     nodes: [
       {
-        name: "",
+        name: `${name} result`,
         createdAt: new Date(),
         updatedAt: new Date(),
         publicId: workFlowNodeId(),
+        isRoot: true,
+        hasInput: true,
+        variables: [],
+      },
+      {
+        name: `Some Leaf`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        publicId: workFlowNodeId(),
+        isRoot: false,
+        hasInput: false,
         variables: [],
       },
     ],
@@ -101,14 +118,14 @@ async function createWorkflow(
     );
   }
 
-  const webhookUrl = `${env.PUBLIC_URL}/api/webhooks/railway/${nWf.publicId}`;
-  const createWebhookRes = await createProjectWebhook(
-    nWf.apiKey,
-    nWf.projectId,
-    webhookUrl,
-  );
+  // const webhookUrl = `${env.PUBLIC_URL}/api/webhooks/railway/${nWf.publicId}`;
+  // const createWebhookRes = await createProjectWebhook(
+  //   nWf.apiKey,
+  //   nWf.projectId,
+  //   webhookUrl,
+  // );
 
-  console.log({ webhookUrl, createWebhookRes });
+  // console.log({ webhookUrl, createWebhookRes });
 
   return nWf;
 }
@@ -157,17 +174,17 @@ export const workflowRouter = createTRPCRouter({
         apiKey: input.apiKey,
       });
 
-      return workFlowProjection(wf);
+      return workflowProjection(wf);
     }),
   getByPublicId: publicProcedure
     .input(z.object({ publicId: z.string() }))
     .query(async ({ input, ctx }) => {
       const wf = await getWorkFlow(ctx.db, input.publicId);
-      return workFlowProjection(wf);
+      return workflowProjection(wf);
     }),
   getLatest: publicProcedure.query(async ({ ctx }) => {
     const wf = await getLatestWorkflow(ctx.db);
-    return workFlowProjection(wf);
+    return workflowProjection(wf);
   }),
   workflowCount: publicProcedure.query(async ({ ctx }) => {
     const db = ctx.db;
