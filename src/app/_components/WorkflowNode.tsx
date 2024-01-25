@@ -13,11 +13,10 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { cn } from "~/lib/utils";
 import { type WorkflowNodeProjection } from "~/server/api/routers/workflow";
 import * as z from "zod";
-import { Controller, useFieldArray, useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Form,
@@ -66,6 +65,10 @@ function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeProjection>) {
 
   function onSubmit(values: TaskFormValues) {
     console.log("onSubmit", { values });
+  }
+
+  function onDelete() {
+    console.log("onDelete");
   }
 
   return (
@@ -222,6 +225,11 @@ function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeProjection>) {
               </Button>
             </div>
             <DialogFooter>
+              {!isRoot && (
+                <Button onClick={onDelete} variant="destructive">
+                  Delete Task
+                </Button>
+              )}
               <Button type="submit">Save changes</Button>
             </DialogFooter>
           </form>
