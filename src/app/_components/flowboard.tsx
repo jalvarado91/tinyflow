@@ -180,10 +180,6 @@ export function LayoutFlow({
     });
   }, [nodes, edges, setNodes, setEdges, fitView]);
 
-  const onNodeClick = useCallback<NodeMouseHandler>((params, node) => {
-    console.log("onNodeClick", { params, node });
-  }, []);
-
   return (
     <ReactFlow
       nodes={nodes}
@@ -191,7 +187,6 @@ export function LayoutFlow({
       nodeTypes={nodeTypes}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
-      onNodeClick={onNodeClick}
       proOptions={{ hideAttribution: true }}
       onConnect={onConnect}
       onLoad={onLayout}
