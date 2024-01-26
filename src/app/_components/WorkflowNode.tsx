@@ -1,7 +1,15 @@
 "use client";
 
 import React, { memo } from "react";
-import { Handle, Position, type NodeProps } from "reactflow";
+import {
+  Handle,
+  Position,
+  type NodeProps,
+  useNodeId,
+  useNodes,
+  useStore,
+  useReactFlow,
+} from "reactflow";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -28,6 +36,11 @@ import {
   FormMessage,
 } from "~/components/ui/form";
 import { Trash2 } from "lucide-react";
+import { api } from "~/trpc/react";
+import { useRouter } from "next/navigation";
+import { useToast } from "~/components/ui/use-toast";
+import { type TRPCClientErrorLike } from "@trpc/client";
+import { type AppRouter } from "~/server/api/root";
 
 const taskFormSchema = z.object({
   containerImage: z.string().min(2),
@@ -43,7 +56,13 @@ const taskFormSchema = z.object({
 
 type TaskFormValues = z.infer<typeof taskFormSchema>;
 
-function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeProjection>) {
+function WorkflowNode({
+  data,
+  selected,
+  id,
+}: NodeProps<WorkflowNodeProjection>) {
+  const router = useRouter();
+  const { toast } = useToast();
   const isRoot = data.isRoot;
   const hasInput = data.hasInput;
 
@@ -52,10 +71,40 @@ function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeProjection>) {
     variables: data.variables,
   };
 
+  const reactFlow = useReactFlow();
+
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
     defaultValues: defaultFormvalues,
     mode: "onChange",
+  });
+
+  const updateWorkflow = api.workflow.updateNode.useMutation({
+    onSuccess: (newNodeData) => {
+      const relevantNode = reactFlow.getNode(id);
+      if (relevantNode) {
+        const otherNodes = reactFlow.getNodes().filter((v) => v.id !== id);
+        reactFlow.setNodes([
+          ...otherNodes,
+          {
+            ...relevantNode,
+            data: newNodeData,
+          },
+        ]);
+      }
+
+      toast({
+        title: "Task changes have been saved.",
+      });
+      router.refresh();
+    },
+    onError: (err: TRPCClientErrorLike<AppRouter>) => {
+      toast({
+        variant: "destructive",
+        title: "Oh no! Couldn't save your changes",
+        description: `${err.message}. Please try again.`,
+      });
+    },
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -65,6 +114,11 @@ function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeProjection>) {
 
   function onSubmit(values: TaskFormValues) {
     console.log("onSubmit", { values });
+
+    updateWorkflow.mutate({
+      id: data.publicId,
+      values,
+    });
   }
 
   function onDelete() {
@@ -137,22 +191,20 @@ function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeProjection>) {
                   <FormControl>
                     <Input placeholder="hello-world" {...field} />
                   </FormControl>
-                  <FormDescription>
-                    <div className="space-y-2">
-                      <div>
-                        Enter a Docker image from DockerHub, GHCR, or quay.io.{" "}
-                        Image must exit once processing is completed.
-                      </div>
-                      <div className="rounded bg-zinc-100 px-4 py-2 text-zinc-600">
-                        <div>Examples </div>
-                        <ul className="list-inside list-disc ">
-                          <li>hello-world</li>
-                          <li>ghcr.io/username/repo:latest</li>
-                          <li>quay.io/username/repo:tag</li>
-                        </ul>
-                      </div>
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <div>
+                      Enter a Docker image from DockerHub, GHCR, or quay.io.{" "}
+                      Image must exit once processing is completed.
                     </div>
-                  </FormDescription>
+                    <div className="rounded bg-zinc-100 px-4 py-2 text-zinc-600">
+                      <div>Examples </div>
+                      <ul className="list-inside list-disc">
+                        <li>hello-world</li>
+                        <li>ghcr.io/username/repo:latest</li>
+                        <li>quay.io/username/repo:tag</li>
+                      </ul>
+                    </div>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -221,16 +273,23 @@ function WorkflowNode({ data, selected }: NodeProps<WorkflowNodeProjection>) {
                 className="mt-2"
                 onClick={() => append({ name: "", value: "" })}
               >
-                Add Variable
+                Add variable
               </Button>
             </div>
             <DialogFooter>
               {!isRoot && (
-                <Button onClick={onDelete} variant="destructive">
-                  Delete Task
+                <Button
+                  onClick={onDelete}
+                  type="button"
+                  disabled={updateWorkflow.isLoading}
+                  variant="destructive"
+                >
+                  Delete task
                 </Button>
               )}
-              <Button type="submit">Save changes</Button>
+              <Button disabled={updateWorkflow.isLoading} type="submit">
+                {updateWorkflow.isLoading ? "Saving..." : "Save task"}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

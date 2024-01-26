@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -17,9 +17,13 @@ import ReactFlow, {
   NodeMouseHandler,
 } from "reactflow";
 import Dagre from "@dagrejs/dagre";
+import { unstable_noStore as noStore } from "next/cache";
 
 import "reactflow/dist/style.css";
-import { type WorkflowProjection } from "~/server/api/routers/workflow";
+import {
+  WorkflowNodeProjection,
+  type WorkflowProjection,
+} from "~/server/api/routers/workflow";
 import WorkflowNode from "./WorkflowNode";
 
 const nodeDefaults = {
@@ -98,7 +102,7 @@ const nodeTypes = {
 const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
 
 const getLayoutedElements = (
-  nodes: Node<WorkflowProjection>[],
+  nodes: Node<WorkflowNodeProjection>[],
   edges: Edge[],
 ) => {
   g.setGraph({ rankdir: "LR" });
@@ -123,12 +127,10 @@ const getLayoutedElements = (
   };
 };
 
-// type WorkflowNode = WorkflowProjection["nodes"][0];
-
 export function FlowBoard({
   workflowNodes,
 }: {
-  workflowNodes: Array<WorkflowProjection>;
+  workflowNodes: Array<WorkflowNodeProjection>;
 }) {
   return (
     <ReactFlowProvider>
@@ -142,12 +144,12 @@ export function LayoutFlow({
   initialWorkflowNodes,
 }: {
   initialWorkflowEdges?: [];
-  initialWorkflowNodes: Array<WorkflowProjection>;
+  initialWorkflowNodes: Array<WorkflowNodeProjection>;
 }) {
-  const initialNodes: Array<Node<WorkflowProjection>> =
+  const initialNodes: Array<Node<WorkflowNodeProjection>> =
     initialWorkflowNodes.map((wfn) => ({
       ...nodeDefaults,
-      id: wfn.publicId,
+      id: `${wfn.publicId}`,
       position: {
         x: 75,
         y: 65,
@@ -159,7 +161,7 @@ export function LayoutFlow({
 
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] =
-    useNodesState<WorkflowProjection>(initialNodes);
+    useNodesState<WorkflowNodeProjection>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const onConnect = useCallback(

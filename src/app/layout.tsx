@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 
 import { TRPCReactProvider } from "~/trpc/react";
 import { cn } from "~/lib/utils";
+import { Toaster } from "~/components/ui/toaster";
 
 const fontSans = Inter({
   subsets: ["latin"],
@@ -25,11 +26,12 @@ export default function RootLayout({
     <html className="h-screen" lang="en">
       <body
         className={cn(
-          "min-h-screen h-full bg-background font-sans antialiased",
+          "h-full min-h-screen bg-background font-sans antialiased",
           fontSans.variable,
         )}
       >
         <TRPCReactProvider>{children}</TRPCReactProvider>
+        <Toaster />
       </body>
     </html>
   );

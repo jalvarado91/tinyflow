@@ -158,6 +158,69 @@ async function getLatestWorkflow(db: Db) {
   return res[0];
 }
 
+const updateWfNodeValuesSchema = z.object({
+  containerImage: z.string().min(1),
+  variables: z
+    .array(
+      z.object({
+        name: z.string(),
+        value: z.string(),
+      }),
+    )
+    .optional(),
+});
+type UpdateWfNodeValues = z.infer<typeof updateWfNodeValuesSchema>;
+
+async function updateWorkflowNode(
+  db: Db,
+  nodeId: string,
+  values: UpdateWfNodeValues,
+) {
+  const collection = db.collection<Workflow>("workflow");
+  const findWfRes = await collection.findOne({
+    nodes: {
+      $elemMatch: {
+        publicId: nodeId,
+      },
+    },
+  });
+
+  console.log({ findWfRes });
+  if (!findWfRes) {
+    throw new Error(`Couldn't find workflow by node with id ${nodeId}`);
+  }
+
+  const workflow = findWfRes;
+  const relevantNode = workflow.nodes.find((n) => n.publicId === nodeId);
+
+  if (!relevantNode) {
+    throw new Error(`Node with id ${nodeId} doesn't exist in workflow`);
+  }
+
+  const now = new Date();
+  const newRelevantNode = {
+    ...relevantNode,
+    containerImage: values.containerImage,
+    variables: values.variables ?? relevantNode.variables,
+    updatedAt: now,
+  } satisfies WorkflowNode;
+
+  const restOfNodes = workflow.nodes.filter((n) => n.publicId !== nodeId);
+  const updatedNodes = [...restOfNodes, newRelevantNode];
+
+  await collection.updateOne(
+    { _id: workflow._id },
+    {
+      $set: {
+        nodes: updatedNodes,
+        updatedAt: now,
+      },
+    },
+  );
+
+  return newRelevantNode;
+}
+
 export const workflowRouter = createTRPCRouter({
   create: publicProcedure
     .input(
@@ -175,6 +238,19 @@ export const workflowRouter = createTRPCRouter({
       });
 
       return workflowProjection(wf);
+    }),
+  updateNode: publicProcedure
+    .input(
+      z.object({
+        id: z.string().min(1),
+        values: updateWfNodeValuesSchema,
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const id = input.id;
+      const values = input.values;
+
+      return await updateWorkflowNode(ctx.db, id, values);
     }),
   getByPublicId: publicProcedure
     .input(z.object({ publicId: z.string() }))
