@@ -43,6 +43,7 @@ import { type TRPCClientErrorLike } from "@trpc/client";
 import { type AppRouter } from "~/server/api/root";
 
 const taskFormSchema = z.object({
+  name: z.string().min(1),
   containerImage: z.string().min(2),
   variables: z
     .array(
@@ -67,6 +68,7 @@ function WorkflowNode({
   const isInput = data.isInput;
 
   const defaultFormvalues: Partial<TaskFormValues> = {
+    name: data.name,
     containerImage: data.containerImage,
     variables: data.variables,
   };
@@ -78,6 +80,8 @@ function WorkflowNode({
     defaultValues: defaultFormvalues,
     mode: "onChange",
   });
+
+  const watchName = form.watch("name");
 
   const updateWorkflow = api.workflow.updateNode.useMutation({
     onSuccess: (newNodeData) => {
@@ -177,11 +181,27 @@ function WorkflowNode({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <DialogHeader>
-              <DialogTitle>Edit {data.name}</DialogTitle>
+              <DialogTitle>Edit {watchName}</DialogTitle>
               <DialogDescription>
                 {"Make changes to your task. Click save when you're done."}
               </DialogDescription>
             </DialogHeader>
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Call LLM" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    A friendly name for your task
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="containerImage"

@@ -197,6 +197,7 @@ async function getLatestWorkflow(db: Db) {
 }
 
 const updateWfNodeValuesSchema = z.object({
+  name: z.string().min(1),
   containerImage: z.string().min(1),
   variables: z
     .array(
@@ -237,6 +238,7 @@ async function updateWorkflowNode(
   const now = new Date();
   const newRelevantNode = {
     ...relevantNode,
+    name: values.name,
     containerImage: values.containerImage,
     variables: values.variables ?? relevantNode.variables,
     updatedAt: now,
