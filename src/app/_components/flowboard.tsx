@@ -14,6 +14,7 @@ import ReactFlow, {
   type Edge,
   type Connection,
   type Node,
+  ControlButton,
 } from "reactflow";
 import Dagre from "@dagrejs/dagre";
 
@@ -29,6 +30,8 @@ import { TRPCClientErrorLike } from "@trpc/client";
 import { AppRouter } from "~/server/api/root";
 import { ToastAction } from "~/components/ui/toast";
 import { useRouter } from "next/navigation";
+import { Button } from "~/components/ui/button";
+import { CircleDot, PlusCircleIcon, StarsIcon } from "lucide-react";
 
 const nodeDefaults = {
   sourcePosition: Position.Right,
@@ -219,8 +222,22 @@ export function LayoutFlow({
       fitView
       className="bg-white"
     >
-      <Panel position="top-right">
-        <button onClick={() => onLayout()}>Cleanup Layout</button>
+      <Panel position="top-left" className="flex gap-2">
+        <Button
+          variant={"outline"}
+          size={"sm"}
+          className="gap-2"
+          onClick={() => onLayout()}
+        >
+          <StarsIcon size={16} />
+          Cleanup Layout
+        </Button>
+        <Button size={"sm"} variant={"outline"} className="gap-2">
+          Add Input Task <CircleDot size={16} />
+        </Button>
+        <Button size={"sm"} variant={"outline"} className="gap-2">
+          <CircleDot size={16} /> Add Task <CircleDot size={16} />
+        </Button>
       </Panel>
       <Background />
       <Controls />

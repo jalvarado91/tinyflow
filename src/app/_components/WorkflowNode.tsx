@@ -35,7 +35,7 @@ import {
   FormLabel,
   FormMessage,
 } from "~/components/ui/form";
-import { Trash2 } from "lucide-react";
+import { CuboidIcon, Trash2 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 import { useToast } from "~/components/ui/use-toast";
@@ -134,7 +134,7 @@ function WorkflowNode({
       <DialogTrigger>
         <div
           className={cn(
-            "justify-start rounded-md border border-slate-200 bg-white px-4 py-2 text-left shadow-md",
+            "justify-start rounded-md border border-slate-200 bg-white px-4 py-2 text-left shadow",
             selected && "outline outline-2",
           )}
         >
@@ -142,15 +142,16 @@ function WorkflowNode({
             <div className="flex h-12 w-12 items-center justify-center rounded-full border bg-gray-100">
               {data.containerImage ? "👍" : "⚠️"}
             </div>
-            <div className="ml-2 flex flex-col gap-4">
+            <div className="ml-2 flex flex-col gap-3">
               <div>
-                <div className="text-lg font-bold">{data.name}</div>
+                <div className="font-semibold">{data.name}</div>
                 <div className="text-xs text-gray-500 ">
                   <code>{data.publicId}</code>
                 </div>
               </div>
               {data.containerImage ? (
-                <div className="text-sm text-gray-500">
+                <div className="flex items-center gap-1 text-sm text-gray-500">
+                  <CuboidIcon size={14} />
                   {data.containerImage}
                 </div>
               ) : (

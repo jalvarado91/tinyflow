@@ -2,6 +2,7 @@
 
 import { ToastAction } from "@radix-ui/react-toast";
 import { type TRPCClientErrorLike } from "@trpc/client";
+import { useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
 import { toast } from "~/components/ui/use-toast";
 import { type AppRouter } from "~/server/api/root";
@@ -9,8 +10,11 @@ import { type WorkflowProjection } from "~/server/api/routers/workflow";
 import { api } from "~/trpc/react";
 
 export function RunButton({ workflow }: { workflow: WorkflowProjection }) {
+  const router = useRouter();
+
   const runWorkflow = api.workflow.run.useMutation({
     onSuccess: () => {
+      router.refresh();
       console.log("On success");
     },
     onError: (err: TRPCClientErrorLike<AppRouter>) => {

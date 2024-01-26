@@ -21,14 +21,67 @@ function workflowRunId() {
   return `wfr_${ulid()}`;
 }
 
+interface RunNodeServiceMapping {
+  nodeId: string;
+  railwayServiceId: string;
+}
+interface RunNodeDepStatus {
+  nodeId: string;
+  recordedStatus: "DEPLOYING" | "FAILED" | "SUCCESS";
+  recoredAt: Date;
+}
+
 interface WorkflowRun {
-  public_id: string;
+  publicId: string;
   workflowId: ObjectId;
   workflowPublicId: string;
+  status: "PREPARING" | "RUNNING" | "FAILED" | "COMPLETED";
   dateStarted: Date;
   nodes: Array<WorkflowNode>;
   edges: Array<WorkflowEdge>;
-  status: "running" | "failed" | "completed";
+  nodesServiceMap: Array<RunNodeServiceMapping>;
+  nodeDeploymentStatuses: Array<RunNodeDepStatus>;
+}
+
+export type RunProjection = ReturnType<typeof runProjection>;
+export type RunServiceMapProjection = RunProjection["nodesServiceMap"][0];
+export type RunDeploymentStatusProjection =
+  RunProjection["nodeDeploymentStatuses"][0];
+
+export type RunNodesProjection = WorkflowProjection["nodes"][0];
+export type RunEdgesProjection = WorkflowProjection["edges"][0];
+
+function runProjection(r: WorkflowRun) {
+  return {
+    publicId: r.publicId,
+    workflowPublicId: r.workflowPublicId,
+    dateStarted: r.dateStarted,
+    status: r.status,
+    nodesServiceMap: r.nodesServiceMap.map((sm) => ({
+      nodeId: sm.nodeId,
+      railwayServiceId: sm.railwayServiceId,
+    })),
+    nodeDeploymentStatuses: r.nodeDeploymentStatuses.map((ds) => ({
+      nodeId: ds.nodeId,
+      recoredAt: ds.recoredAt,
+      recoredStatus: ds.recordedStatus,
+    })),
+    nodes: r.nodes.map((n) => ({
+      publicId: n.publicId,
+      name: n.name,
+      createdAt: n.createdAt,
+      updatedAt: n.updatedAt,
+      isRoot: n.isRoot,
+      isInput: n.isInput,
+      containerImage: n.containerImage,
+      variables: n.variables,
+    })),
+    edges: r.edges.map((e) => ({
+      publicId: e.publicId,
+      source: e.source,
+      target: e.target,
+    })),
+  };
 }
 
 interface WorkflowNode {
@@ -40,7 +93,6 @@ interface WorkflowNode {
   variables: Array<{ name: string; value: string }>;
   isRoot: boolean;
   isInput: boolean;
-  // input_node_ids: Array<string>
 }
 
 interface WorkflowEdge {
@@ -366,8 +418,8 @@ function isValidDag(nodes: WorkflowNode[], edges: WorkflowEdge[]) {
 }
 
 async function runWorkflow(db: Db, workflowId: string) {
-  const collection = db.collection<Workflow>("workflow");
-  const findWfRes = await collection.findOne({
+  const workflowCollection = db.collection<Workflow>("workflow");
+  const findWfRes = await workflowCollection.findOne({
     publicId: workflowId,
   });
 
@@ -394,41 +446,83 @@ async function runWorkflow(db: Db, workflowId: string) {
   console.log("Workflow is executable. Now to running it.");
 
   const now = new Date();
-  const workflowRun = {
-    public_id: workflowRunId(),
+  const run = {
+    publicId: workflowRunId(),
     workflowId: workflow._id,
     workflowPublicId: workflow.publicId,
     dateStarted: now,
     nodes: nodes,
     edges: edges,
-    status: "running",
+    status: "RUNNING",
+    nodeDeploymentStatuses: [],
+    nodesServiceMap: [] as RunNodeServiceMapping[],
   } satisfies WorkflowRun;
 
-  const thisBatch = workflowRun.nodes.filter((n) => n.isInput);
+  const thisBatch = run.nodes.filter((n) => n.isInput);
 
-  const promises = Promise.all(
+  const res = await Promise.all(
     thisBatch.map(async (n) => {
       const createRes = await createService(
         workflow.apiKey,
         workflow.projectId,
-        `${n.name} ${now.getTime()}`,
+        `${n.name} at ${now.getTime()}`,
         n.containerImage!,
         n.variables,
       );
 
-      return [n.publicId, createRes] as const;
+      return {
+        nodeId: n.publicId,
+        railwayServiceId: createRes.serviceCreate.id,
+      } as const;
     }),
   );
 
-  const res = await promises;
+  const newMappings = res.map<RunNodeServiceMapping>((r) => ({
+    nodeId: r.nodeId,
+    railwayServiceId: r.railwayServiceId,
+  }));
 
-  console.log("runWorkflow", {
-    workflowRun,
-    res: res.map(
-      ([publicId, rwS]) =>
-        `${publicId}: ${rwS.serviceCreate.id} : ${rwS.serviceCreate.name}`,
-    ),
+  const newNodeDepMap = [...run.nodesServiceMap, ...newMappings];
+  run.nodesServiceMap = newNodeDepMap;
+
+  // console.log("runWorkflow", {
+  //   workflowRun: run,
+  //   res: res.map(
+  //     ({ nodeId, railwayServiceId }) => `${nodeId}: ${railwayServiceId} `,
+  //   ),
+  // });
+
+  const runsCollection = db.collection<WorkflowRun>("runs");
+  const { insertedId } = await runsCollection.insertOne(run);
+  const nRun = await runsCollection.findOne({
+    _id: insertedId,
   });
+
+  if (!nRun) {
+    throw new Error(`Couldn't start run for workflow ${workflow.name}`);
+  }
+
+  // const webhookUrl = `${env.PUBLIC_URL}/api/webhooks/railway/${nWf.publicId}`;
+  // const createWebhookRes = await createProjectWebhook(
+  //   nWf.apiKey,
+  //   nWf.projectId,
+  //   webhookUrl,
+  // );
+
+  // console.log({ webhookUrl, createWebhookRes });
+
+  return nRun;
+}
+
+async function getLatestRuns(db: Db) {
+  const collection = db.collection<WorkflowRun>("runs");
+  const res = await collection
+    .find()
+    .sort({ dateStarted: -1 })
+    .limit(50)
+    .toArray();
+
+  return res;
 }
 
 export const workflowRouter = createTRPCRouter({
@@ -497,6 +591,15 @@ export const workflowRouter = createTRPCRouter({
     .input(z.object({ workflowId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const workflowId = input.workflowId;
-      return await runWorkflow(ctx.db, workflowId);
+      const run = await runWorkflow(ctx.db, workflowId);
+      return runProjection(run);
     }),
+  getRuns: publicProcedure.query(async ({ ctx }) => {
+    const runs = await getLatestRuns(ctx.db);
+    const res = {
+      total: runs.length,
+      runs: runs.map((r) => runProjection(r)),
+    };
+    return res;
+  }),
 });
