@@ -79,7 +79,7 @@ async function WorkflowView() {
         </div>
       </div>
       <div className="flex flex-1">
-        <FlowBoard workflowNodes={wf.nodes} />
+        <FlowBoard workflowNodes={wf.nodes} workflowEdges={wf.edges} />
       </div>
     </main>
   );

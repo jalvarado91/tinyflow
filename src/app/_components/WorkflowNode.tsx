@@ -64,7 +64,7 @@ function WorkflowNode({
   const router = useRouter();
   const { toast } = useToast();
   const isRoot = data.isRoot;
-  const hasInput = data.hasInput;
+  const isInput = data.isInput;
 
   const defaultFormvalues: Partial<TaskFormValues> = {
     containerImage: data.containerImage,
@@ -157,7 +157,7 @@ function WorkflowNode({
             </div>
           </div>
 
-          {hasInput && (
+          {isInput && (
             <Handle
               type="target"
               position={Position.Left}
@@ -214,6 +214,7 @@ function WorkflowNode({
                 <FormLabel>Variables</FormLabel>
                 <FormDescription className="mb-4">
                   Add variables to your task container. <br />
+                  {/* TODO: Maybe disable this for input nodes */}
                   <span className="text-xs font-semibold">
                     <code>INPUT_URL</code>
                   </span>{" "}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -14,86 +14,26 @@ import ReactFlow, {
   type Edge,
   type Connection,
   type Node,
-  NodeMouseHandler,
 } from "reactflow";
 import Dagre from "@dagrejs/dagre";
-import { unstable_noStore as noStore } from "next/cache";
 
 import "reactflow/dist/style.css";
 import {
-  WorkflowNodeProjection,
-  type WorkflowProjection,
+  type WorkflowEdgeProjection,
+  type WorkflowNodeProjection,
 } from "~/server/api/routers/workflow";
 import WorkflowNode from "./WorkflowNode";
+import { api } from "~/trpc/react";
+import { toast } from "~/components/ui/use-toast";
+import { TRPCClientErrorLike } from "@trpc/client";
+import { AppRouter } from "~/server/api/root";
+import { ToastAction } from "~/components/ui/toast";
+import { useRouter } from "next/navigation";
 
 const nodeDefaults = {
   sourcePosition: Position.Right,
   targetPosition: Position.Left,
 };
-
-// const initialNodes = [
-//   {
-//     ...nodeDefaults,
-//     id: "1",
-//     position: {
-//       x: 75,
-//       y: 65,
-//     },
-//     data: { label: "default style 1" },
-//     type: "input",
-//   },
-//   {
-//     ...nodeDefaults,
-//     id: "2",
-//     position: {
-//       x: 275,
-//       y: 20,
-//     },
-//     data: { label: "default style 2" },
-//   },
-//   {
-//     ...nodeDefaults,
-//     id: "3",
-//     position: {
-//       x: 275,
-//       y: 110,
-//     },
-//     data: { label: "default style 3" },
-//   },
-//   {
-//     ...nodeDefaults,
-//     id: "4",
-//     position: {
-//       x: 475,
-//       y: 65,
-//     },
-//     data: { label: "Output" },
-//     type: "output",
-//   },
-// ];
-
-// const initialEdges = [
-//   {
-//     id: "e1-2",
-//     source: "1",
-//     target: "2",
-//   },
-//   {
-//     id: "e1-3",
-//     source: "1",
-//     target: "3",
-//   },
-//   {
-//     id: "e2-e4",
-//     source: "2",
-//     target: "4",
-//   },
-//   {
-//     id: "e3-e4",
-//     source: "3",
-//     target: "4",
-//   },
-// ];
 
 const nodeTypes = {
   workflow: WorkflowNode,
@@ -127,23 +67,26 @@ const getLayoutedElements = (
   };
 };
 
-export function FlowBoard({
-  workflowNodes,
-}: {
+type FlowBoardProps = {
   workflowNodes: Array<WorkflowNodeProjection>;
-}) {
+  workflowEdges: Array<WorkflowEdgeProjection>;
+};
+export function FlowBoard({ workflowNodes, workflowEdges }: FlowBoardProps) {
   return (
     <ReactFlowProvider>
-      <LayoutFlow initialWorkflowNodes={workflowNodes} />
+      <LayoutFlow
+        initialWorkflowEdges={workflowEdges}
+        initialWorkflowNodes={workflowNodes}
+      />
     </ReactFlowProvider>
   );
 }
 
 export function LayoutFlow({
-  initialWorkflowEdges = [],
+  initialWorkflowEdges,
   initialWorkflowNodes,
 }: {
-  initialWorkflowEdges?: [];
+  initialWorkflowEdges: Array<WorkflowEdgeProjection>;
   initialWorkflowNodes: Array<WorkflowNodeProjection>;
 }) {
   const initialNodes: Array<Node<WorkflowNodeProjection>> =
@@ -155,19 +98,99 @@ export function LayoutFlow({
         y: 65,
       },
       data: wfn,
+      width: 307,
+      height: 98,
       type: "workflow",
     }));
-  const initialEdges = initialWorkflowEdges;
+  const initialEdges = initialWorkflowEdges.map((wfe) => ({
+    id: wfe.publicId,
+    source: wfe.source,
+    target: wfe.target,
+  }));
+
+  const initialLayouted = useMemo(
+    () => getLayoutedElements(initialNodes, initialEdges),
+    [initialEdges, initialNodes],
+  );
 
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] =
-    useNodesState<WorkflowNodeProjection>(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+    useNodesState<WorkflowNodeProjection>(initialLayouted.nodes);
+  const [edges, setEdges, onEdgesChange] =
+    useEdgesState<WorkflowEdgeProjection>(initialLayouted.edges);
+
+  const router = useRouter();
+
+  const connectNodes = api.workflow.connectNodes.useMutation({
+    onSuccess: () => {
+      router.refresh();
+    },
+    onError: (err: TRPCClientErrorLike<AppRouter>) => {
+      toast({
+        variant: "destructive",
+        title: "Oh no! Couldn't save your changes",
+        description: `${err.message}. Please try again.`,
+        action: (
+          <ToastAction
+            onClick={() => window.location.reload()}
+            altText={"Try again"}
+          >
+            Refresh
+          </ToastAction>
+        ),
+      });
+      router.refresh();
+    },
+  });
 
   const onConnect = useCallback(
-    (params: Edge | Connection) => setEdges((els) => addEdge(params, els)),
-    [setEdges],
+    (params: Edge | Connection) => {
+      console.log("onConnect", { params });
+      setEdges((els) => addEdge(params, els));
+      if (params.source && params.target) {
+        connectNodes.mutate({
+          sourceId: params.source,
+          targetId: params.target,
+        });
+      }
+    },
+    [connectNodes, setEdges],
   );
+
+  const deleteEdge = api.workflow.deleteEdge.useMutation({
+    onSuccess: () => {
+      router.refresh();
+    },
+    onError: (err: TRPCClientErrorLike<AppRouter>) => {
+      toast({
+        variant: "destructive",
+        title: "Oh no! Couldn't save your changes",
+        description: `${err.message}. Please try again.`,
+        action: (
+          <ToastAction
+            onClick={() => window.location.reload()}
+            altText={"Try again"}
+          >
+            Refresh
+          </ToastAction>
+        ),
+      });
+      router.refresh();
+    },
+  });
+
+  function onEdgesDelete(edges: Edge[]) {
+    // Let's just assume only editing one for now
+    const edge = edges[0];
+    if (!edge) {
+      return;
+    }
+
+    deleteEdge.mutate({
+      sourceId: edge.source,
+      targetId: edge.target,
+    });
+  }
 
   const onLayout = useCallback(() => {
     const layouted = getLayoutedElements(nodes, edges);
@@ -191,6 +214,7 @@ export function LayoutFlow({
       onEdgesChange={onEdgesChange}
       proOptions={{ hideAttribution: true }}
       onConnect={onConnect}
+      onEdgesDelete={onEdgesDelete}
       onLoad={onLayout}
       fitView
       className="bg-white"

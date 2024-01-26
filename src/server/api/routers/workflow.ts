@@ -5,12 +5,16 @@ import { type Db } from "mongodb";
 import { env } from "~/env";
 import { createProjectWebhook } from "~/server/railway-client";
 
-function workFlowId() {
+function workflowId() {
   return `wf_${ulid()}`;
 }
 
-function workFlowNodeId() {
+function workflowNodeId() {
   return `wfn_${ulid()}`;
+}
+
+function workflowEdgeId() {
+  return `wfe_${ulid()}`;
 }
 
 interface WorkflowNode {
@@ -21,7 +25,7 @@ interface WorkflowNode {
   containerImage?: string;
   variables: Array<{ name: string; value: string }>;
   isRoot: boolean;
-  hasInput: boolean;
+  isInput: boolean;
   // input_node_ids: Array<string>
 }
 
@@ -39,10 +43,12 @@ interface Workflow {
   name: string;
   apiKey: string;
   nodes: Array<WorkflowNode>;
+  edges: Array<WorkflowEdge>;
 }
 
 export type WorkflowProjection = ReturnType<typeof workflowProjection>;
 export type WorkflowNodeProjection = WorkflowProjection["nodes"][0];
+export type WorkflowEdgeProjection = WorkflowProjection["edges"][0];
 
 function workflowProjection(wf: Workflow) {
   return {
@@ -58,9 +64,14 @@ function workflowProjection(wf: Workflow) {
       createdAt: n.createdAt,
       updatedAt: n.updatedAt,
       isRoot: n.isRoot,
-      hasInput: n.hasInput,
+      isInput: n.isInput,
       containerImage: n.containerImage,
       variables: n.variables,
+    })),
+    edges: wf.edges.map((e) => ({
+      publicId: e.publicId,
+      source: e.source,
+      target: e.target,
     })),
   } as const;
 }
@@ -77,31 +88,42 @@ async function createWorkflow(
     apiKey: string;
   },
 ) {
+  const inputId = workflowNodeId();
+  const outputId = workflowNodeId();
+  const now = new Date();
+
   const wf = {
-    publicId: workFlowId(),
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    publicId: workflowId(),
+    createdAt: now,
+    updatedAt: now,
     projectId: projectId,
     name: name,
     apiKey: apiKey,
     nodes: [
       {
-        name: `${name} result`,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        publicId: workFlowNodeId(),
+        name: `Output Task`,
+        createdAt: now,
+        updatedAt: now,
+        publicId: outputId,
         isRoot: true,
-        hasInput: true,
+        isInput: true,
         variables: [],
       },
       {
-        name: `Some Leaf`,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        publicId: workFlowNodeId(),
+        name: `Input Task`,
+        createdAt: now,
+        updatedAt: now,
+        publicId: inputId,
         isRoot: false,
-        hasInput: false,
+        isInput: false,
         variables: [],
+      },
+    ],
+    edges: [
+      {
+        publicId: workflowEdgeId(),
+        source: inputId,
+        target: outputId,
       },
     ],
   } satisfies Workflow;
@@ -185,7 +207,6 @@ async function updateWorkflowNode(
     },
   });
 
-  console.log({ findWfRes });
   if (!findWfRes) {
     throw new Error(`Couldn't find workflow by node with id ${nodeId}`);
   }
@@ -219,6 +240,90 @@ async function updateWorkflowNode(
   );
 
   return newRelevantNode;
+}
+
+async function connectNodes(db: Db, sourceId: string, targetId: string) {
+  const collection = db.collection<Workflow>("workflow");
+  const findWfRes = await collection.findOne({
+    nodes: {
+      $elemMatch: {
+        publicId: sourceId,
+      },
+    },
+  });
+
+  if (!findWfRes) {
+    throw new Error(`Couldn't find workflow by node with id ${sourceId}`);
+  }
+
+  const workflow = findWfRes;
+  const existingEdge = workflow.edges.find(
+    (e) => e.source === sourceId && e.target === targetId,
+  );
+
+  if (existingEdge) {
+    return existingEdge;
+  }
+
+  const now = new Date();
+  const edge = {
+    publicId: workflowEdgeId(),
+    source: sourceId,
+    target: targetId,
+  } satisfies WorkflowEdge;
+
+  const updatedEdges = [...workflow.edges, edge];
+
+  await collection.updateOne(
+    { _id: workflow._id },
+    {
+      $set: {
+        edges: updatedEdges,
+        updatedAt: now,
+      },
+    },
+  );
+
+  return edge;
+}
+
+async function deleteEdge(db: Db, sourceId: string, targetId: string) {
+  const collection = db.collection<Workflow>("workflow");
+  const findWfRes = await collection.findOne({
+    nodes: {
+      $elemMatch: {
+        publicId: sourceId,
+      },
+    },
+  });
+
+  if (!findWfRes) {
+    throw new Error(`Couldn't find workflow by node with id ${sourceId}`);
+  }
+
+  const workflow = findWfRes;
+  const edgeToDelete = workflow.edges.find(
+    (e) => e.source === sourceId && e.target === targetId,
+  );
+
+  if (!edgeToDelete) {
+    return;
+  }
+
+  const now = new Date();
+  const updatedEdges = workflow.edges.filter(
+    (e) => e.publicId !== edgeToDelete.publicId,
+  );
+
+  await collection.updateOne(
+    { _id: workflow._id },
+    {
+      $set: {
+        edges: updatedEdges,
+        updatedAt: now,
+      },
+    },
+  );
 }
 
 export const workflowRouter = createTRPCRouter({
@@ -268,4 +373,19 @@ export const workflowRouter = createTRPCRouter({
     const count = await collection.countDocuments();
     return { count };
   }),
+  connectNodes: publicProcedure
+    .input(
+      z.object({
+        sourceId: z.string(),
+        targetId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return await connectNodes(ctx.db, input.sourceId, input.targetId);
+    }),
+  deleteEdge: publicProcedure
+    .input(z.object({ sourceId: z.string(), targetId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return await deleteEdge(ctx.db, input.sourceId, input.targetId);
+    }),
 });

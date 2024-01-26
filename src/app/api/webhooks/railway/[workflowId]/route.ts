@@ -4,9 +4,9 @@ export async function POST(
   request: Request,
   { params }: { params: { workflowId: string } },
 ) {
-  const workFlowId = params.workflowId;
+  const workflowId = params.workflowId;
   const req = (await request.json()) as unknown;
-  console.log(`Webhook call for wf: ${workFlowId}" with`, req);
+  console.log(`Webhook call for wf: ${workflowId}" with`, req);
 
   return new Response("Success!", {
     status: 200,
