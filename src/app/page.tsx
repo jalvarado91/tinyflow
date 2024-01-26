@@ -4,6 +4,7 @@ import { api } from "~/trpc/server";
 import { FlowBoard } from "./_components/flowboard";
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { RunButton } from "./_components/run-button";
 
 export default async function Home() {
   noStore();
@@ -26,10 +27,6 @@ async function Onboarding() {
 
 async function WorkflowView() {
   const wf = await api.workflow.getLatest.query();
-
-  const runWorkflow = {
-    isLoading: false,
-  };
   return (
     <main className="flex h-full min-h-screen w-screen bg-white">
       <div className="grid h-full max-w-md flex-1 flex-shrink-0 grid-cols-1 grid-rows-[auto_minmax(0px,_1fr)] shadow">
@@ -68,13 +65,7 @@ async function WorkflowView() {
             </pre>
           </div>
           <div className="flex-shrink-0 justify-self-end px-4 py-4">
-            <Button
-              type="submit"
-              disabled={runWorkflow.isLoading}
-              className="w-full"
-            >
-              {runWorkflow.isLoading ? "Running..." : "Run"}
-            </Button>
+            <RunButton workflow={wf} />
           </div>
         </div>
       </div>

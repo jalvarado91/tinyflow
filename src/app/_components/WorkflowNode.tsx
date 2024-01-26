@@ -157,7 +157,7 @@ function WorkflowNode({
             </div>
           </div>
 
-          {isInput && (
+          {!isInput && (
             <Handle
               type="target"
               position={Position.Left}

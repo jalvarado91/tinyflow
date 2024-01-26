@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { ulid } from "ulid";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
-import { type Db } from "mongodb";
+import { ObjectId, type Db } from "mongodb";
 import { env } from "~/env";
-import { createProjectWebhook } from "~/server/railway-client";
+import { createProjectWebhook, createService } from "~/server/railway-client";
 
 function workflowId() {
   return `wf_${ulid()}`;
@@ -15,6 +15,20 @@ function workflowNodeId() {
 
 function workflowEdgeId() {
   return `wfe_${ulid()}`;
+}
+
+function workflowRunId() {
+  return `wfr_${ulid()}`;
+}
+
+interface WorkflowRun {
+  public_id: string;
+  workflowId: ObjectId;
+  workflowPublicId: string;
+  dateStarted: Date;
+  nodes: Array<WorkflowNode>;
+  edges: Array<WorkflowEdge>;
+  status: "running" | "failed" | "completed";
 }
 
 interface WorkflowNode {
@@ -58,6 +72,8 @@ function workflowProjection(wf: Workflow) {
     projectId: wf.projectId,
     name: wf.name,
     apiKey: wf.apiKey,
+    isValidDag: isValidDag(wf.nodes, wf.edges),
+    isRunnable: wf.nodes.every((n) => Boolean(n.containerImage)),
     nodes: wf.nodes.map((n) => ({
       publicId: n.publicId,
       name: n.name,
@@ -106,7 +122,7 @@ async function createWorkflow(
         updatedAt: now,
         publicId: outputId,
         isRoot: true,
-        isInput: true,
+        isInput: false,
         variables: [],
       },
       {
@@ -115,7 +131,7 @@ async function createWorkflow(
         updatedAt: now,
         publicId: inputId,
         isRoot: false,
-        isInput: false,
+        isInput: true,
         variables: [],
       },
     ],
@@ -326,6 +342,93 @@ async function deleteEdge(db: Db, sourceId: string, targetId: string) {
   );
 }
 
+function isValidDag(nodes: WorkflowNode[], edges: WorkflowEdge[]) {
+  // has sink node (node with no outputs)
+  const hasSinkNode = nodes.some(
+    (n) =>
+      n.isRoot &&
+      edges.some((e) => n.publicId === e.source || n.publicId === e.target),
+  );
+
+  // has source node (node with no inputs)
+  const hasSourceNode = nodes.some(
+    (n) =>
+      n.isInput &&
+      edges.some((e) => n.publicId === e.source || n.publicId === e.target),
+  );
+
+  // has no cycles
+  const hasNoCycles = true;
+
+  return hasNoCycles && hasSourceNode && hasSinkNode;
+}
+
+async function runWorkflow(db: Db, workflowId: string) {
+  const collection = db.collection<Workflow>("workflow");
+  const findWfRes = await collection.findOne({
+    publicId: workflowId,
+  });
+
+  if (!findWfRes) {
+    throw new Error(`Couldn't find workflow id ${workflowId}`);
+  }
+
+  const workflow = findWfRes;
+
+  const nodes = workflow.nodes;
+  const edges = workflow.edges;
+  const isDag = isValidDag(nodes, edges);
+  if (!isDag) {
+    throw new Error(`Workflow can't be run because there are cycles`);
+  }
+
+  const nodesAreNunnable = nodes.every((n) => Boolean(n.containerImage));
+  if (!nodesAreNunnable) {
+    throw new Error(
+      `Workflow can't be run becase not all tasks have valid container images`,
+    );
+  }
+
+  console.log("Workflow is executable. Now to running it.");
+
+  const now = new Date();
+  const workflowRun = {
+    public_id: workflowRunId(),
+    workflowId: workflow._id,
+    workflowPublicId: workflow.publicId,
+    dateStarted: now,
+    nodes: nodes,
+    edges: edges,
+    status: "running",
+  } satisfies WorkflowRun;
+
+  const thisBatch = workflowRun.nodes.filter((n) => n.isInput);
+
+  const promises = Promise.all(
+    thisBatch.map(async (n) => {
+      const createRes = await createService(
+        workflow.apiKey,
+        workflow.projectId,
+        `${n.name} ${now.getTime()}`,
+        n.containerImage!,
+        n.variables,
+      );
+
+      return [n.publicId, createRes] as const;
+    }),
+  );
+
+  const res = await promises;
+
+  console.log("runWorkflow", {
+    workflowRun,
+    res: res.map(
+      ([publicId, rwS]) =>
+        `${publicId}: ${rwS.serviceCreate.id} : ${rwS.serviceCreate.name}`,
+    ),
+  });
+}
+
 export const workflowRouter = createTRPCRouter({
   create: publicProcedure
     .input(
@@ -387,5 +490,11 @@ export const workflowRouter = createTRPCRouter({
     .input(z.object({ sourceId: z.string(), targetId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return await deleteEdge(ctx.db, input.sourceId, input.targetId);
+    }),
+  run: publicProcedure
+    .input(z.object({ workflowId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const workflowId = input.workflowId;
+      return await runWorkflow(ctx.db, workflowId);
     }),
 });

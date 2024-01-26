@@ -32,3 +32,74 @@ export async function createProjectWebhook(
 
   return data;
 }
+
+export async function createService(
+  token: string,
+  projectId: string,
+  name: string,
+  containerImage: string,
+  variables: Array<{ name: string; value: string }>,
+) {
+  const mutation: TypedDocumentNode<
+    {
+      serviceCreate: {
+        id: string;
+        name: string;
+      };
+    },
+    {
+      name: string;
+      image: string;
+      projectId: string;
+      variables: Record<string, string>;
+    }
+  > = parse(gql`
+    mutation CreateService(
+      $projectId: String!
+      $name: String!
+      $image: String!
+      $variables: ServiceVariables
+    ) {
+      serviceCreate(
+        input: {
+          name: $name
+          projectId: $projectId
+          source: { image: $image }
+          variables: $variables
+        }
+      ) {
+        id
+        name
+        deployments {
+          edges {
+            node {
+              id
+              status
+            }
+          }
+        }
+      }
+    }
+  `);
+
+  const data = await request(
+    apiUrl,
+    mutation,
+    {
+      name,
+      projectId,
+      image: containerImage,
+      variables: variables.reduce((acc, curr) => {
+        return {
+          ...acc,
+          [curr.name]: curr.value,
+        };
+      }, {}),
+    },
+    {
+      Authorization: `Bearer ${token}`,
+    },
+  );
+
+  return data;
+}
