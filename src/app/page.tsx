@@ -65,7 +65,7 @@ async function WorkflowView() {
                     <div className="text-sm text-slate-700">
                       Kicked off{" "}
                       <span className="font-semibold text-slate-800">
-                        {formatDistance(r.dateStarted, now, {
+                        {formatDistance(r.startedAt, now, {
                           addSuffix: true,
                         })}
                       </span>

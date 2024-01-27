@@ -26,12 +26,12 @@ import {
 import WorkflowNode from "./WorkflowNode";
 import { api } from "~/trpc/react";
 import { toast } from "~/components/ui/use-toast";
-import { TRPCClientErrorLike } from "@trpc/client";
-import { AppRouter } from "~/server/api/root";
+import { type TRPCClientErrorLike } from "@trpc/client";
+import { type AppRouter } from "~/server/api/root";
 import { ToastAction } from "~/components/ui/toast";
 import { useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
-import { CircleDot, PlusCircleIcon, StarsIcon } from "lucide-react";
+import { CircleDot, StarsIcon } from "lucide-react";
 
 const nodeDefaults = {
   sourcePosition: Position.Right,
