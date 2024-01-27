@@ -87,13 +87,18 @@ export function runProjection(r: WorkflowRun) {
   };
 }
 
+export type WorkflowNodeVariables = Array<{
+  name: string;
+  value: string;
+}>;
+
 export interface WorkflowNode {
   publicId: string;
   name: string;
   createdAt: Date;
   updatedAt: Date;
   containerImage?: string;
-  variables: Array<{ name: string; value: string }>;
+  variables: WorkflowNodeVariables;
   isRoot: boolean;
   isInput: boolean;
 }
@@ -315,6 +320,50 @@ async function updateWorkflowNode(
   return newRelevantNode;
 }
 
+async function createWorkflowNode(
+  db: Db,
+  workflowId: string,
+  type: "INPUT" | "NORMAL",
+) {
+  const workflowCollection = db.collection<Workflow>("workflow");
+  const workflow = await workflowCollection.findOne({
+    publicId: workflowId,
+  });
+
+  if (!workflow) {
+    throw new Error(`Couldn't find workflow id ${workflowId}`);
+  }
+
+  const isInput = type === "INPUT";
+  const name = isInput ? "New Input Task" : "New Task";
+  const now = new Date();
+  const nodeId = workflowNodeId();
+  const newNode = {
+    publicId: nodeId,
+    createdAt: now,
+    updatedAt: now,
+    isInput: isInput,
+    name: name,
+    isRoot: false,
+    containerImage: undefined,
+    variables: [] as WorkflowNodeVariables,
+  } satisfies WorkflowNode;
+
+  const updatedNodes = [...workflow.nodes, newNode];
+
+  await workflowCollection.updateOne(
+    { _id: workflow._id },
+    {
+      $set: {
+        nodes: updatedNodes,
+        updatedAt: now,
+      },
+    },
+  );
+
+  return newNode;
+}
+
 async function connectNodes(db: Db, sourceId: string, targetId: string) {
   const collection = db.collection<Workflow>("workflow");
   const findWfRes = await collection.findOne({
@@ -513,7 +562,7 @@ async function runWorkflow(db: Db, workflowId: string) {
       const createRes = await createService(
         workflow.apiKey,
         workflow.projectId,
-        `${n.name} at ${now.getTime()}`,
+        `${n.name} ${now.getTime()}`,
         n.containerImage!,
         n.variables,
       );
@@ -541,10 +590,7 @@ async function runWorkflow(db: Db, workflowId: string) {
   });
 
   const runsCollection = db.collection<WorkflowRun>("runs");
-  const { insertedId, acknowledged } = await runsCollection.insertOne(run);
-  // const nRun = await runsCollection.findOne({
-  //   _id: insertedId,
-  // });
+  const { acknowledged } = await runsCollection.insertOne(run);
 
   if (!acknowledged) {
     throw new Error(`Couldn't start run for workflow ${workflow.name}`);
@@ -581,6 +627,13 @@ export const workflowRouter = createTRPCRouter({
       });
 
       return workflowProjection(wf);
+    }),
+  createNode: publicProcedure
+    .input(
+      z.object({ workflowId: z.string(), type: z.enum(["INPUT", "NORMAL"]) }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return await createWorkflowNode(ctx.db, input.workflowId, input.type);
     }),
   updateNode: publicProcedure
     .input(

@@ -78,7 +78,7 @@ async function WorkflowView() {
         </div>
         <div className="flex flex-col border-x">
           <div className="flex-shrink-0 bg-slate-50 py-4 shadow-inner">
-            <pre className="mx-4 overflow-x-auto text-xs">
+            <pre className="mx-4 max-h-[600px] overflow-x-auto overflow-y-auto text-xs">
               {JSON.stringify(wf, null, 2)}
             </pre>
           </div>
@@ -88,7 +88,11 @@ async function WorkflowView() {
         </div>
       </div>
       <div className="flex flex-1">
-        <FlowBoard workflowNodes={wf.nodes} workflowEdges={wf.edges} />
+        <FlowBoard
+          workflowId={wf.publicId}
+          workflowNodes={wf.nodes}
+          workflowEdges={wf.edges}
+        />
       </div>
     </main>
   );

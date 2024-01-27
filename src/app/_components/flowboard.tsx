@@ -70,13 +70,19 @@ const getLayoutedElements = (
 };
 
 type FlowBoardProps = {
+  workflowId: string;
   workflowNodes: Array<WorkflowNodeProjection>;
   workflowEdges: Array<WorkflowEdgeProjection>;
 };
-export function FlowBoard({ workflowNodes, workflowEdges }: FlowBoardProps) {
+export function FlowBoard({
+  workflowId,
+  workflowNodes,
+  workflowEdges,
+}: FlowBoardProps) {
   return (
     <ReactFlowProvider>
       <LayoutFlow
+        workflowId={workflowId}
         initialWorkflowEdges={workflowEdges}
         initialWorkflowNodes={workflowNodes}
       />
@@ -85,14 +91,16 @@ export function FlowBoard({ workflowNodes, workflowEdges }: FlowBoardProps) {
 }
 
 export function LayoutFlow({
+  workflowId,
   initialWorkflowEdges,
   initialWorkflowNodes,
 }: {
+  workflowId: string;
   initialWorkflowEdges: Array<WorkflowEdgeProjection>;
   initialWorkflowNodes: Array<WorkflowNodeProjection>;
 }) {
-  const initialNodes: Array<Node<WorkflowNodeProjection>> =
-    initialWorkflowNodes.map((wfn) => ({
+  function toReactFlowNode(wfn: WorkflowNodeProjection) {
+    return {
       ...nodeDefaults,
       id: `${wfn.publicId}`,
       position: {
@@ -103,7 +111,10 @@ export function LayoutFlow({
       width: 307,
       height: 98,
       type: "workflow",
-    }));
+    };
+  }
+  const initialNodes: Array<Node<WorkflowNodeProjection>> =
+    initialWorkflowNodes.map(toReactFlowNode);
   const initialEdges = initialWorkflowEdges.map((wfe) => ({
     id: wfe.publicId,
     source: wfe.source,
@@ -122,6 +133,30 @@ export function LayoutFlow({
     useEdgesState<WorkflowEdgeProjection>(initialLayouted.edges);
 
   const router = useRouter();
+
+  const createNode = api.workflow.createNode.useMutation({
+    onSuccess: (data) => {
+      router.refresh();
+      const mappedNode = toReactFlowNode(data);
+      setNodes((nodes) => [...nodes, mappedNode]);
+    },
+    onError: (err: TRPCClientErrorLike<AppRouter>) => {
+      toast({
+        variant: "destructive",
+        title: "Oh no! Couldn't save your changes",
+        description: `${err.message}. Please try again.`,
+        action: (
+          <ToastAction
+            onClick={() => window.location.reload()}
+            altText={"Try again"}
+          >
+            Refresh
+          </ToastAction>
+        ),
+      });
+      router.refresh();
+    },
+  });
 
   const connectNodes = api.workflow.connectNodes.useMutation({
     onSuccess: () => {
@@ -207,6 +242,13 @@ export function LayoutFlow({
     });
   }, [nodes, edges, setNodes, setEdges, fitView]);
 
+  const onAddTask = useCallback(
+    (type: "INPUT" | "NORMAL") => {
+      createNode.mutate({ type: type, workflowId: workflowId });
+    },
+    [createNode, workflowId],
+  );
+
   return (
     <ReactFlow
       nodes={nodes}
@@ -231,10 +273,22 @@ export function LayoutFlow({
           <StarsIcon size={16} />
           Cleanup Layout
         </Button>
-        <Button size={"sm"} variant={"outline"} className="gap-2">
+        <Button
+          onClick={() => onAddTask("INPUT")}
+          disabled={createNode.isLoading}
+          size={"sm"}
+          variant={"outline"}
+          className="gap-2"
+        >
           Add Input Task <CircleDot size={16} />
         </Button>
-        <Button size={"sm"} variant={"outline"} className="gap-2">
+        <Button
+          onClick={() => onAddTask("NORMAL")}
+          disabled={createNode.isLoading}
+          size={"sm"}
+          variant={"outline"}
+          className="gap-2"
+        >
           <CircleDot size={16} /> Add Task <CircleDot size={16} />
         </Button>
       </Panel>

@@ -35,7 +35,7 @@ import { type TRPCClientErrorLike } from "@trpc/client";
 import { type AppRouter } from "~/server/api/root";
 
 const taskFormSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(20, "Name must be less than 20 chars"),
   containerImage: z.string().min(2),
   variables: z
     .array(
@@ -189,7 +189,7 @@ function WorkflowNode({
                     <Input placeholder="Call LLM" {...field} />
                   </FormControl>
                   <FormDescription>
-                    A friendly name for your task
+                    A friendly name for your task. (max 20 chars)
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
