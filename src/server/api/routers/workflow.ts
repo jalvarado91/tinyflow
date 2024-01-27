@@ -31,11 +31,12 @@ export interface RunNodeDepStatus {
   recoredAt: Date;
 }
 
+export type RunStatus = "PREPARING" | "RUNNING" | "FAILED" | "COMPLETED";
 export interface WorkflowRun {
   publicId: string;
   workflowId: ObjectId;
   workflowPublicId: string;
-  status: "PREPARING" | "RUNNING" | "FAILED" | "COMPLETED";
+  status: RunStatus;
   startedAt: Date;
   updatedAt: Date;
   nodes: Array<WorkflowNode>;

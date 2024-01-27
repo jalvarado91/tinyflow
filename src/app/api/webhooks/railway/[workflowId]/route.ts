@@ -5,6 +5,7 @@ import {
   type WorkflowRun,
   type Workflow,
   type RunNodeServiceMapping,
+  RunStatus,
 } from "~/server/api/routers/workflow";
 import { createDbConnection } from "~/server/db/db";
 import { createService } from "~/server/railway-client";
@@ -35,6 +36,16 @@ async function recordDeploymentEvent(
   }
 
   const run = findRes;
+
+  // If we already finished processing this run, we can ignore future events
+  // like railways' REMOVED events
+  if (run.status === "COMPLETED" || run.status === "FAILED") {
+    console.log(
+      `BAILED on incoming event for service ${railwayServiceId}, with status ${payload.status}`,
+    );
+    return;
+  }
+
   const relevantNodeMapping = run.nodesServiceMappings.find(
     (sm) => sm.railwayServiceId === railwayServiceId,
   );
@@ -62,20 +73,29 @@ async function recordDeploymentEvent(
   console.log("nodesToRun:", nodesToRun);
 
   if (nodesToRun.length === 0) {
-    // Complete with current node failure or full run success
-    const isDeploying = payload.status === "DEPLOYING";
-    const newStatus = isDeploying
-      ? "RUNNING"
-      : payload.status === "FAILED"
-        ? "FAILED"
-        : "COMPLETED";
+    // If we don't have any more nodes to run we either:
+    // - Ran into a failuire, in which case we mark the run as FAILED and save current updates.
+    // - We are currently dealing with the root, which
+    //   - Completed successfully, so we mark the run as COMPLETED
+    //   - Or is still in flight so we continue
+    // - We still have things in flight, so we save the current status and move on. Next event should resolve
+
+    let newStatus: RunStatus = "RUNNING";
+
+    if (payload.status === "FAILED") {
+      newStatus = "FAILED";
+    } else {
+      const currentNode = run.nodes.find((n) => n.publicId === relevantNodeId)!;
+      const isCurrentRoot = currentNode.isRoot;
+      if (isCurrentRoot) {
+        newStatus = payload.status === "SUCCESS" ? "COMPLETED" : "RUNNING";
+      }
+    }
 
     run.status = newStatus;
     run.updatedAt = now;
 
     console.log("beforeupdate", payload.status, run.status);
-    // console.log("beforeupdate", run);
-
     await runsCollection.updateOne(
       {
         _id: run._id,
