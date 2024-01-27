@@ -402,7 +402,7 @@ function assertNoCycles(
   nodes: Array<WorkflowNode>,
   edges: Array<WorkflowEdge>,
 ): boolean {
-  const adjacencyList: { [key: string]: Array<string> } = {};
+  const adjacencyList: Record<string, Array<string>> = {};
 
   // Create adjacency list
   nodes.forEach((node) => {
@@ -412,11 +412,11 @@ function assertNoCycles(
     adjacencyList[edge.source]!.push(edge.target);
   });
 
-  const visited: { [key: string]: boolean } = {};
+  const visited: Record<string, boolean> = {};
 
-  for (let node of nodes) {
+  for (const node of nodes) {
     const stack: Array<string> = [];
-    const recursionStack: { [key: string]: boolean } = {};
+    const recursionStack: Record<string, boolean> = {};
 
     stack.push(node.publicId);
 
@@ -429,7 +429,7 @@ function assertNoCycles(
 
       const nodeNeighbors = adjacencyList[currentNode]!;
 
-      for (let neighbor of nodeNeighbors) {
+      for (const neighbor of nodeNeighbors) {
         if (!visited[neighbor]) {
           stack.push(neighbor);
         } else if (recursionStack[neighbor]) {

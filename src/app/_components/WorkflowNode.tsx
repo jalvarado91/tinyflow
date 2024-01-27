@@ -1,15 +1,7 @@
 "use client";
 
 import React, { memo } from "react";
-import {
-  Handle,
-  Position,
-  type NodeProps,
-  useNodeId,
-  useNodes,
-  useStore,
-  useReactFlow,
-} from "reactflow";
+import { Handle, Position, type NodeProps, useReactFlow } from "reactflow";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
