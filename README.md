@@ -1,28 +1,26 @@
-# Create T3 App
+# TinyFlow 
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+Hello 👋! TinyFlow is a tiny distributed workflow implementation. It lets you create a DAG of tasks which can only start once all dependecies have completed successfully. 
 
-## What's next? How do I make an app with this?
+Tasks are simply containers that run a process and exit when completed successfully. 
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+![Alt text](image.png)
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+### Deploying
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+You'll need a railway project, a railway API token, and some tasks you'd like to run. 
+In your railway project you'll need a MongoDb service running. That's the only dependency. Give your service an external URL and go through the onboarding details.
 
-## Learn More
+TinyFlow can live in the same project where the resources will be deployed to, or it can reference a different project. At this time, a TinyFlow deployment only supports one project, so I recommend putting in in the same railway project where the resources will be.
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+You can also try my instance at https://tinyflow.up.railway.app
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+### About Tasks
+I have setup some task containers, built with Nixpacks as seen in the sample above. 
 
-## How do I deploy this?
+You can find the source and image pages bellow
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+- https://github.com/jalvarado91/tinyflow-samples/
+- https://hub.docker.com/repository/docker/jalvarado91/tinyflow-samples-ex1-python
+- https://hub.docker.com/repository/docker/jalvarado91/tinyflow-samples-ex1-node
