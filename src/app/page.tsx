@@ -1,7 +1,7 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { CreateWorkflow } from "~/app/_components/create-workflow";
 import { api } from "~/trpc/server";
-import { FlowBoard } from "./_components/flowboard";
+import { WorkflowEditor } from "./_components/workflow-editor";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { RunButton } from "./_components/run-button";
 import { formatDistance } from "date-fns";
@@ -12,7 +12,6 @@ import { cn } from "~/lib/utils";
 export default async function Home() {
   noStore();
   const { count } = await api.workflow.workflowCount.query();
-
   return <>{count === 0 ? <Onboarding /> : <WorkflowView />}</>;
 }
 
@@ -43,9 +42,7 @@ async function WorkflowView() {
       <div className="z-10 grid h-full max-w-md flex-1 flex-shrink-0 grid-cols-1 grid-rows-[auto_minmax(0px,_1fr)] shadow-md">
         <div className="b flex-grow-0 flex-col border-x px-4 py-4">
           <h2 className="text-2xl font-semibold">{wf.name}</h2>
-          <p className="text-sm ">
-            Edit or run your workflow
-          </p>
+          <p className="text-sm ">Edit or run your workflow</p>
         </div>
         <div className="flex h-full flex-col gap-3 border pt-4">
           <h2 className="flex-grow-0 px-4 text-xs font-semibold text-slate-800">
@@ -99,7 +96,7 @@ async function WorkflowView() {
         </div>
       </div>
       <div className="flex flex-1">
-        <FlowBoard
+        <WorkflowEditor
           workflowId={wf.publicId}
           workflowNodes={wf.nodes}
           workflowEdges={wf.edges}

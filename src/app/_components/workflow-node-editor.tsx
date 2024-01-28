@@ -55,6 +55,7 @@ function WorkflowNode({
   id,
 }: NodeProps<WorkflowNodeProjection>) {
   const router = useRouter();
+  const reactFlow = useReactFlow();
   const { toast } = useToast();
   const isRoot = data.isRoot;
   const isInput = data.isInput;
@@ -65,13 +66,23 @@ function WorkflowNode({
     variables: data.variables,
   };
 
-  const reactFlow = useReactFlow();
-
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
     defaultValues: defaultFormvalues,
     mode: "onChange",
   });
+
+  const { fields, append, remove } = useFieldArray({
+    name: "variables",
+    control: form.control,
+  });
+
+  function onSubmit(values: TaskFormValues) {
+    updateWorkflow.mutate({
+      id: data.publicId,
+      values,
+    });
+  }
 
   const watchName = form.watch("name");
 
@@ -102,20 +113,6 @@ function WorkflowNode({
       });
     },
   });
-
-  const { fields, append, remove } = useFieldArray({
-    name: "variables",
-    control: form.control,
-  });
-
-  function onSubmit(values: TaskFormValues) {
-    console.log("onSubmit", { values });
-
-    updateWorkflow.mutate({
-      id: data.publicId,
-      values,
-    });
-  }
 
   function onDelete() {
     reactFlow.deleteElements({ nodes: [{ id: id }] });

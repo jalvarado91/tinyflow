@@ -1,15 +1,14 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { api } from "~/trpc/server";
 import { ScrollArea } from "~/components/ui/scroll-area";
-import { format, formatDistance } from "date-fns";
 import { notFound } from "next/navigation";
 import { type RunProjection } from "~/server/api/routers/workflow";
 import { RunRefresher } from "~/app/_components/run-refresher";
-import { FlowBoard } from "~/app/_components/flowboard";
 import { ClientDateTime } from "~/app/_components/client-datetime";
 import { cn } from "~/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { RunViewer } from "~/app/_components/run-viewer";
 
 export default async function RunPage({
   params,
@@ -51,10 +50,6 @@ async function WorkflowView({ run }: { run: RunProjection }) {
       railwayServiceId: nodeServiceMapping?.railwayServiceId ?? "",
     };
   });
-
-  const wf = await api.workflow.getLatest.query();
-
-  const now = new Date();
 
   return (
     <main className="flex h-full min-h-screen w-screen bg-white">
@@ -127,7 +122,9 @@ async function WorkflowView({ run }: { run: RunProjection }) {
                           "bg-sky-50 text-sky-700  ring-sky-600/20",
                       )}
                     >
-                      {historyEvent.status}
+                      {historyEvent.status === "DEPLOYING"
+                        ? "STARTED"
+                        : historyEvent.status}
                     </div>
                   </div>
                 );
@@ -144,10 +141,10 @@ async function WorkflowView({ run }: { run: RunProjection }) {
         </div> */}
       </div>
       <div className="flex flex-1">
-        <FlowBoard
-          workflowId={wf.publicId}
-          workflowNodes={wf.nodes}
-          workflowEdges={wf.edges}
+        <RunViewer
+          key={run.publicId}
+          workflowNodes={run.nodes}
+          workflowEdges={run.edges}
         />
       </div>
     </main>

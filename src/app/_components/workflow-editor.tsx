@@ -7,7 +7,6 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   addEdge,
-  Position,
   ReactFlowProvider,
   useReactFlow,
   Panel,
@@ -16,14 +15,13 @@ import ReactFlow, {
   type Node,
   type NodeChange,
 } from "reactflow";
-import Dagre from "@dagrejs/dagre";
 
 import "reactflow/dist/style.css";
 import {
   type WorkflowEdgeProjection,
   type WorkflowNodeProjection,
 } from "~/server/api/routers/workflow";
-import WorkflowNode from "./WorkflowNode";
+import WorkflowNode from "./workflow-node-editor";
 import { api } from "~/trpc/react";
 import { toast } from "~/components/ui/use-toast";
 import { type TRPCClientErrorLike } from "@trpc/client";
@@ -32,54 +30,22 @@ import { ToastAction } from "~/components/ui/toast";
 import { useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
 import { CircleDot, Loader2, StarsIcon } from "lucide-react";
-
-const nodeDefaults = {
-  sourcePosition: Position.Right,
-  targetPosition: Position.Left,
-};
+import { getLayoutedElements, toReactFlowNode } from "./flow-utils";
 
 const nodeTypes = {
   workflow: WorkflowNode,
 };
 
-const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-
-const getLayoutedElements = (
-  nodes: Node<WorkflowNodeProjection>[],
-  edges: Edge[],
-) => {
-  g.setGraph({ rankdir: "LR" });
-
-  edges.forEach((edge) => g.setEdge(edge.source, edge.target));
-  nodes.forEach((node) =>
-    g.setNode(node.id, {
-      label: node.data.publicId,
-      width: node.width!,
-      height: node.height!,
-    }),
-  );
-
-  Dagre.layout(g);
-
-  return {
-    nodes: nodes.map((node) => {
-      const { x, y } = g.node(node.id);
-      return { ...node, position: { x, y } };
-    }),
-    edges,
-  };
-};
-
-type FlowBoardProps = {
+type WorkflowEditorProps = {
   workflowId: string;
   workflowNodes: Array<WorkflowNodeProjection>;
   workflowEdges: Array<WorkflowEdgeProjection>;
 };
-export function FlowBoard({
+export function WorkflowEditor({
   workflowId,
   workflowNodes,
   workflowEdges,
-}: FlowBoardProps) {
+}: WorkflowEditorProps) {
   return (
     <ReactFlowProvider>
       <LayoutFlow
@@ -100,20 +66,12 @@ export function LayoutFlow({
   initialWorkflowEdges: Array<WorkflowEdgeProjection>;
   initialWorkflowNodes: Array<WorkflowNodeProjection>;
 }) {
-  function toReactFlowNode(wfn: WorkflowNodeProjection) {
-    return {
-      ...nodeDefaults,
-      id: `${wfn.publicId}`,
-      position: {
-        x: 75,
-        y: 65,
-      },
-      data: wfn,
-      width: 307,
-      height: 98,
-      type: "workflow",
-    };
-  }
+  const router = useRouter();
+  const { fitView, getNode } = useReactFlow<
+    WorkflowNodeProjection,
+    WorkflowEdgeProjection
+  >();
+
   const initialNodes: Array<Node<WorkflowNodeProjection>> =
     initialWorkflowNodes.map(toReactFlowNode);
   const initialEdges = initialWorkflowEdges.map((wfe) => ({
@@ -127,44 +85,50 @@ export function LayoutFlow({
     [initialEdges, initialNodes],
   );
 
-  const { fitView, getNode } = useReactFlow<
-    WorkflowNodeProjection,
-    WorkflowEdgeProjection
-  >();
   const [nodes, setNodes, onNodesChange] =
     useNodesState<WorkflowNodeProjection>(initialLayouted.nodes);
   const [edges, setEdges, onEdgesChange] =
     useEdgesState<WorkflowEdgeProjection>(initialLayouted.edges);
 
-  const router = useRouter();
+  // Don't allow removing the root node
+  function shouldNodeBeRemoved(node: Node<WorkflowNodeProjection>) {
+    return !node.data.isRoot;
+  }
+  function handleNodeChanges(changes: NodeChange[]) {
+    const nextChanges = changes.reduce((acc, change) => {
+      if (change.type === "remove") {
+        const node = getNode(change.id);
+
+        if (node && shouldNodeBeRemoved(node)) {
+          return [...acc, change];
+        }
+
+        return acc;
+      }
+
+      return [...acc, change];
+    }, [] as NodeChange[]);
+    onNodesChange(nextChanges);
+  }
+
+  const onLayout = useCallback(() => {
+    const layouted = getLayoutedElements(nodes, edges);
+
+    console.log({ layouted });
+
+    setNodes([...layouted.nodes]);
+    setEdges([...layouted.edges]);
+
+    window.requestAnimationFrame(() => {
+      fitView();
+    });
+  }, [nodes, edges, setNodes, setEdges, fitView]);
 
   const createNode = api.workflow.createNode.useMutation({
     onSuccess: (data) => {
       router.refresh();
       const mappedNode = toReactFlowNode(data);
       setNodes((nodes) => [...nodes, mappedNode]);
-    },
-    onError: (err: TRPCClientErrorLike<AppRouter>) => {
-      toast({
-        variant: "destructive",
-        title: "Oh no! Couldn't save your changes",
-        description: `${err.message}. Please refresh and try again.`,
-        action: (
-          <ToastAction
-            onClick={() => window.location.reload()}
-            altText={"Try again"}
-          >
-            Refresh
-          </ToastAction>
-        ),
-      });
-      router.refresh();
-    },
-  });
-
-  const connectNodes = api.workflow.connectNodes.useMutation({
-    onSuccess: () => {
-      router.refresh();
     },
     onError: (err: TRPCClientErrorLike<AppRouter>) => {
       toast({
@@ -206,19 +170,27 @@ export function LayoutFlow({
     },
   });
 
-  const onConnect = useCallback(
-    (params: Edge | Connection) => {
-      console.log("onConnect", { params });
-      setEdges((els) => addEdge(params, els));
-      if (params.source && params.target) {
-        connectNodes.mutate({
-          sourceId: params.source,
-          targetId: params.target,
-        });
-      }
+  const connectNodes = api.workflow.connectNodes.useMutation({
+    onSuccess: () => {
+      router.refresh();
     },
-    [connectNodes, setEdges],
-  );
+    onError: (err: TRPCClientErrorLike<AppRouter>) => {
+      toast({
+        variant: "destructive",
+        title: "Oh no! Couldn't save your changes",
+        description: `${err.message}. Please refresh and try again.`,
+        action: (
+          <ToastAction
+            onClick={() => window.location.reload()}
+            altText={"Try again"}
+          >
+            Refresh
+          </ToastAction>
+        ),
+      });
+      router.refresh();
+    },
+  });
 
   const deleteEdges = api.workflow.deleteEdges.useMutation({
     onSuccess: () => {
@@ -242,15 +214,12 @@ export function LayoutFlow({
     },
   });
 
-  function onEdgesDelete(edges: Edge[]) {
-    deleteEdges.mutate({
-      workflowId: workflowId,
-      edges: edges.map((e) => ({
-        sourceId: e.source,
-        targetId: e.target,
-      })),
-    });
-  }
+  const onAddTask = useCallback(
+    (type: "INPUT" | "NORMAL") => {
+      createNode.mutate({ type: type, workflowId: workflowId });
+    },
+    [createNode, workflowId],
+  );
 
   function onNodesDelete(nodes: Node<WorkflowNodeProjection>[]) {
     const notRoots = nodes.filter((n) => !n.data.isRoot);
@@ -261,45 +230,28 @@ export function LayoutFlow({
     });
   }
 
-  function shouldNodeBeRemoved(node: Node<WorkflowNodeProjection>) {
-    return !node.data.isRoot;
-  }
-
-  function handleNodeChanges(changes: NodeChange[]) {
-    const nextChanges = changes.reduce((acc, change) => {
-      if (change.type === "remove") {
-        const node = getNode(change.id);
-
-        if (node && shouldNodeBeRemoved(node)) {
-          return [...acc, change];
-        }
-
-        return acc;
-      }
-
-      return [...acc, change];
-    }, [] as NodeChange[]);
-    onNodesChange(nextChanges);
-  }
-
-  const onLayout = useCallback(() => {
-    const layouted = getLayoutedElements(nodes, edges);
-
-    console.log({ layouted });
-
-    setNodes([...layouted.nodes]);
-    setEdges([...layouted.edges]);
-
-    window.requestAnimationFrame(() => {
-      fitView();
+  function onEdgesDelete(edges: Edge[]) {
+    deleteEdges.mutate({
+      workflowId: workflowId,
+      edges: edges.map((e) => ({
+        sourceId: e.source,
+        targetId: e.target,
+      })),
     });
-  }, [nodes, edges, setNodes, setEdges, fitView]);
+  }
 
-  const onAddTask = useCallback(
-    (type: "INPUT" | "NORMAL") => {
-      createNode.mutate({ type: type, workflowId: workflowId });
+  const onConnect = useCallback(
+    (params: Edge | Connection) => {
+      console.log("onConnect", { params });
+      setEdges((els) => addEdge(params, els));
+      if (params.source && params.target) {
+        connectNodes.mutate({
+          sourceId: params.source,
+          targetId: params.target,
+        });
+      }
     },
-    [createNode, workflowId],
+    [connectNodes, setEdges],
   );
 
   const isSaving =
@@ -360,7 +312,7 @@ export function LayoutFlow({
           <CircleDot size={16} /> Add Task <CircleDot size={16} />
         </Button>
       </Panel>
-      <Background />
+      <Background gap={14} />
       <Controls />
     </ReactFlow>
   );
