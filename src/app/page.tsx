@@ -43,7 +43,7 @@ async function WorkflowView() {
       <div className="z-10 grid h-full max-w-md flex-1 flex-shrink-0 grid-cols-1 grid-rows-[auto_minmax(0px,_1fr)] shadow-md">
         <div className="b flex-grow-0 flex-col border-x px-4 py-4">
           <h2 className="text-2xl font-semibold">{wf.name}</h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm ">
             Edit or run your workflow
           </p>
         </div>

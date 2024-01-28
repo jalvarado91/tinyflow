@@ -46,10 +46,11 @@ export function RunButton({ workflow }: { workflow: WorkflowProjection }) {
       <Button
         onClick={onRun}
         type="submit"
+        size={"lg"}
         disabled={
           !workflow.isValidDag || !workflow.isRunnable || runWorkflow.isLoading
         }
-        className="w-full"
+        className="w-full font-semibold"
       >
         {runWorkflow.isLoading ? "Starting run..." : "Start a run"}
       </Button>

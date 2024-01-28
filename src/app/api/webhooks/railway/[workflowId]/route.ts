@@ -18,9 +18,8 @@ async function recordDeploymentEvent(
   payload: DeploymentWebhookPayload,
 ) {
   const railwayServiceId = payload.service.id;
-
   const runsCollection = db.collection<WorkflowRun>("runs");
-  const findRes = await runsCollection.findOne({
+  const run = await runsCollection.findOne({
     workflowPublicId: workflowId,
     nodesServiceMappings: {
       $elemMatch: {
@@ -29,13 +28,11 @@ async function recordDeploymentEvent(
     },
   });
 
-  if (!findRes) {
+  if (!run) {
     const msg = `Couldn't find run by containing a railway service id ${railwayServiceId}`;
     console.log("Error", msg);
     throw new Error(msg);
   }
-
-  const run = findRes;
 
   // If we already finished processing this run, we can ignore future events
   // like railways' REMOVED events
@@ -110,13 +107,11 @@ async function recordDeploymentEvent(
     );
 
     // TODO: Emit realtime even here
-    //
 
     return;
   }
 
   // TODO: Emit realtime even here
-  //
 
   const workflowCollection = db.collection<Workflow>("workflow");
   const workflow = await workflowCollection.findOne({
@@ -221,7 +216,7 @@ function getNextNodesToRun(
         (e) => e.target === nodeCandidate.publicId,
       );
 
-      console.log("edgesIntoCandidate ranNodes", edgesIntoCandidate);
+      console.log("edgesIntoCandidate", edgesIntoCandidate);
 
       const allIncomingCompleted = edgesIntoCandidate.every((e) =>
         completedNodes.includes(e.source),
@@ -242,11 +237,20 @@ export async function POST(
   { params }: { params: { workflowId: string } },
 ) {
   const workflowId = params.workflowId;
-  const body = (await request.json()) as DeploymentWebhookPayload;
-  console.log(`Webhook call for wf: ${workflowId}" with`, body);
+  const payload = (await request.json()) as DeploymentWebhookPayload;
+
+  const shouldHandle = ["DEPLOYING", "SUCCESS", "FAILED"].includes(
+    payload.status,
+  );
+  if (!shouldHandle) {
+    console.log(
+      `Correctly ignored event ${payload.status} for service ${payload.service.id}`,
+    );
+    return;
+  }
 
   const db = await createDbConnection();
-  await recordDeploymentEvent(db, workflowId, body);
+  await recordDeploymentEvent(db, workflowId, payload);
 
   return new Response("Success!", {
     status: 200,
@@ -286,64 +290,3 @@ interface DeploymentWebhookPayload {
     name: string;
   };
 }
-
-// Webhook call for wf: wf_01HMZF3YYP7XTGXP0GPQS29S09" with {
-//   type: 'DEPLOY',
-//   project: {
-//     id: '51fcde57-02e2-4ebf-85c4-a4ba858389a7',
-//     name: 'LLM Workflow',
-//     description: '',
-//     createdAt: '2024-01-24T19:18:47.468Z'
-//   },
-//   deployment: {
-//     id: '994b234f-e65c-4bbc-80eb-8f7f5f1fcc21',
-//     meta: {
-//       image: 'hello-world',
-//       logsV2: true,
-//       volumeMounts: [],
-//       serviceManifest: [Object]
-//     },
-//     creator: {
-//       id: 'd54752a9-9012-451a-8272-70e4d5646d2b',
-//       name: 'Juan Alvarado',
-//       avatar: 'https://avatars.githubusercontent.com/u/1750392?v=4'
-//     }
-//   },
-//   environment: { id: '982cb0b2-3791-4e54-bad8-d97c7b335a8f', name: 'production' },
-//   status: 'DEPLOYING',
-//   timestamp: '2024-01-26T21:11:25.794Z',
-//   service: {
-//     id: 'dfe8fee0-6dd9-4df4-9caf-bfd438ff49f4',
-//     name: 'Input Task at 1706303484676'
-//   }
-// }
-// Webhook call for wf: wf_01HMZF3YYP7XTGXP0GPQS29S09" with {
-//   type: 'DEPLOY',
-//   project: {
-//     id: '51fcde57-02e2-4ebf-85c4-a4ba858389a7',
-//     name: 'LLM Workflow',
-//     description: '',
-//     createdAt: '2024-01-24T19:18:47.468Z'
-//   },
-//   deployment: {
-//     id: '994b234f-e65c-4bbc-80eb-8f7f5f1fcc21',
-//     meta: {
-//       image: 'hello-world',
-//       logsV2: true,
-//       volumeMounts: [],
-//       serviceManifest: [Object]
-//     },
-//     creator: {
-//       id: 'd54752a9-9012-451a-8272-70e4d5646d2b',
-//       name: 'Juan Alvarado',
-//       avatar: 'https://avatars.githubusercontent.com/u/1750392?v=4'
-//     }
-//   },
-//   environment: { id: '982cb0b2-3791-4e54-bad8-d97c7b335a8f', name: 'production' },
-//   status: 'SUCCESS',
-//   timestamp: '2024-01-26T21:11:31.177Z',
-//   service: {
-//     id: 'dfe8fee0-6dd9-4df4-9caf-bfd438ff49f4',
-//     name: 'Input Task at 1706303484676'
-//   }
-// }
