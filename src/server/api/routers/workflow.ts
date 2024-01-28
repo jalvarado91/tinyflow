@@ -165,6 +165,8 @@ async function createWorkflow(
   },
 ) {
   const inputId = workflowNodeId();
+  const someNodeJsId = workflowNodeId();
+  const somePythonId = workflowNodeId();
   const outputId = workflowNodeId();
   const now = new Date();
 
@@ -177,21 +179,43 @@ async function createWorkflow(
     apiKey: apiKey,
     nodes: [
       {
-        name: `Output Task`,
-        createdAt: now,
-        updatedAt: now,
-        publicId: outputId,
-        isRoot: true,
-        isInput: false,
-        variables: [],
-      },
-      {
         name: `Input Task`,
         createdAt: now,
         updatedAt: now,
         publicId: inputId,
         isRoot: false,
         isInput: true,
+        containerImage: "hello-world",
+        variables: [],
+      },
+      {
+        name: `Some nodejs`,
+        createdAt: now,
+        updatedAt: now,
+        publicId: someNodeJsId,
+        isRoot: false,
+        isInput: false,
+        containerImage: "jalvarado91/tinyflow-samples-ex1-node:latest",
+        variables: [],
+      },
+      {
+        name: `Some python`,
+        createdAt: now,
+        updatedAt: now,
+        publicId: somePythonId,
+        isRoot: false,
+        isInput: true,
+        containerImage: "jalvarado91/tinyflow-samples-ex1-python:latest",
+        variables: [],
+      },
+      {
+        name: `Output Task`,
+        createdAt: now,
+        updatedAt: now,
+        publicId: outputId,
+        isRoot: true,
+        isInput: false,
+        containerImage: "hello-world",
         variables: [],
       },
     ],
@@ -199,6 +223,16 @@ async function createWorkflow(
       {
         publicId: workflowEdgeId(),
         source: inputId,
+        target: someNodeJsId,
+      },
+      {
+        publicId: workflowEdgeId(),
+        source: someNodeJsId,
+        target: outputId,
+      },
+      {
+        publicId: workflowEdgeId(),
+        source: somePythonId,
         target: outputId,
       },
     ],

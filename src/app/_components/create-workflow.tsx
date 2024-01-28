@@ -81,7 +81,7 @@ export function CreateWorkflow() {
                       <FormLabel>Name</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="LLM Question Answering"
+                          placeholder="Distributed Calculator"
                           {...field}
                         />
                       </FormControl>

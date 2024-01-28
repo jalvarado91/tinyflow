@@ -35,7 +35,7 @@ import { type TRPCClientErrorLike } from "@trpc/client";
 import { type AppRouter } from "~/server/api/root";
 
 const taskFormSchema = z.object({
-  name: z.string().min(1).max(20, "Name must be less than 20 chars"),
+  name: z.string().min(1).max(15, "Name must be less than 15 chars"),
   containerImage: z.string().min(2),
   variables: z
     .array(
@@ -230,14 +230,14 @@ function WorkflowNode({
                 <FormDescription className="mb-4">
                   Add variables to your task container. <br />
                   {/* TODO: Maybe disable this for input nodes */}
-                  <span className="text-xs font-semibold">
+                  {/* <span className="text-xs font-semibold">
                     <code>INPUT_URL</code>
                   </span>{" "}
                   and{" "}
                   <span className="text-xs font-semibold">
                     <code>OUTPUT_POST_URL</code>
                   </span>{" "}
-                  will also be injected.
+                  will also be injected. */}
                 </FormDescription>
                 {fields.map((field, index) => (
                   <div key={field.id} className="space-y-4">
