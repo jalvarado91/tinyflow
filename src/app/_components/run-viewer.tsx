@@ -18,8 +18,8 @@ import ReactFlow, {
 
 import "reactflow/dist/style.css";
 import {
-  type WorkflowEdgeProjection,
-  type WorkflowNodeProjection,
+  type RunEdgeProjection,
+  type RunNodeProjection,
 } from "~/server/api/routers/workflow";
 import { Button } from "~/components/ui/button";
 import { StarsIcon } from "lucide-react";
@@ -31,8 +31,8 @@ const nodeTypes = {
 };
 
 type RunViewerProps = {
-  workflowNodes: Array<WorkflowNodeProjection>;
-  workflowEdges: Array<WorkflowEdgeProjection>;
+  workflowNodes: Array<RunNodeProjection>;
+  workflowEdges: Array<RunEdgeProjection>;
 };
 export function RunViewer({ workflowNodes, workflowEdges }: RunViewerProps) {
   return (
@@ -46,34 +46,35 @@ export function RunViewer({ workflowNodes, workflowEdges }: RunViewerProps) {
 }
 
 export function LayoutFlow({
-  initialWorkflowEdges,
   initialWorkflowNodes,
+  initialWorkflowEdges,
 }: {
-  initialWorkflowEdges: Array<WorkflowEdgeProjection>;
-  initialWorkflowNodes: Array<WorkflowNodeProjection>;
+  initialWorkflowNodes: Array<RunNodeProjection>;
+  initialWorkflowEdges: Array<RunEdgeProjection>;
 }) {
-  const { fitView } = useReactFlow<
-    WorkflowNodeProjection,
-    WorkflowEdgeProjection
-  >();
+  const { fitView } = useReactFlow<RunNodeProjection, RunEdgeProjection>();
 
-  const initialNodes: Array<Node<WorkflowNodeProjection>> =
+  const initialNodes: Array<Node<RunNodeProjection>> =
     initialWorkflowNodes.map(toReactFlowNode);
-  const initialEdges = initialWorkflowEdges.map((wfe) => ({
-    id: wfe.publicId,
-    source: wfe.source,
-    target: wfe.target,
-  }));
+  const initialEdges: Array<Edge<RunEdgeProjection>> = initialWorkflowEdges.map(
+    (wfe) => ({
+      id: wfe.publicId,
+      source: wfe.source,
+      target: wfe.target,
+    }),
+  );
 
   const initialLayouted = useMemo(
     () => getLayoutedElements(initialNodes, initialEdges),
     [initialEdges, initialNodes],
   );
 
-  const [nodes, setNodes, onNodesChange] =
-    useNodesState<WorkflowNodeProjection>(initialLayouted.nodes);
-  const [edges, setEdges, onEdgesChange] =
-    useEdgesState<WorkflowEdgeProjection>(initialLayouted.edges);
+  const [nodes, setNodes, onNodesChange] = useNodesState<RunNodeProjection>(
+    initialLayouted.nodes,
+  );
+  const [edges, setEdges, onEdgesChange] = useEdgesState<RunEdgeProjection>(
+    initialLayouted.edges,
+  );
 
   function handleEdgeChanges(changes: EdgeChange[]) {
     const nextChanges = changes.reduce((acc, change) => {
@@ -115,7 +116,7 @@ export function LayoutFlow({
     });
   }, [nodes, edges, setNodes, setEdges, fitView]);
 
-  function onNodesDelete(_: Node<WorkflowNodeProjection>[]) {
+  function onNodesDelete(_: Node<RunNodeProjection>[]) {
     return;
   }
 

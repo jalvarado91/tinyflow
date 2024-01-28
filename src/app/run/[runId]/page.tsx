@@ -34,7 +34,7 @@ async function WorkflowView({ run }: { run: RunProjection }) {
   const nodes = run.nodes;
   const serviceMappings = run.nodesServiceMappings;
   const statusHistory = run.nodeDeploymentStatuses.sort(
-    (a, b) => b.recoredAt.getTime() - a.recoredAt.getTime(),
+    (a, b) => b.recordedAt.getTime() - a.recordedAt.getTime(),
   );
 
   const history = statusHistory.map((s) => {
@@ -46,10 +46,12 @@ async function WorkflowView({ run }: { run: RunProjection }) {
       node,
       nodeId: s.nodeId,
       status: s.recoredStatus,
-      recordedAt: s.recoredAt,
+      recordedAt: s.recordedAt,
       railwayServiceId: nodeServiceMapping?.railwayServiceId ?? "",
     };
   });
+
+  const latestHistoryEvent = history[0];
 
   return (
     <main className="flex h-full min-h-screen w-screen bg-white">
@@ -142,7 +144,7 @@ async function WorkflowView({ run }: { run: RunProjection }) {
       </div>
       <div className="flex flex-1">
         <RunViewer
-          key={run.publicId}
+          key={latestHistoryEvent?.recordedAt.getTime() ?? run.publicId}
           workflowNodes={run.nodes}
           workflowEdges={run.edges}
         />

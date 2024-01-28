@@ -59,7 +59,7 @@ async function recordDeploymentEvent(
   const newNodeDepStatus = {
     nodeId: relevantNodeId,
     recordedStatus: payload.status,
-    recoredAt: now,
+    recordedAt: now,
   } satisfies RunNodeDepStatus;
 
   const newStatuses = [...run.nodeDeploymentStatuses, newNodeDepStatus];

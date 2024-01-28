@@ -7,9 +7,12 @@ import { Position, type Edge, type Node } from "reactflow";
 
 const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
 
-export const getLayoutedElements = (
-  nodes: Node<WorkflowNodeProjection>[],
-  edges: Edge<WorkflowEdgeProjection>[],
+export const getLayoutedElements = <
+  NType extends { publicId: string },
+  EType extends { publicId: string },
+>(
+  nodes: Node<NType>[],
+  edges: Edge<EType>[],
 ) => {
   g.setGraph({ rankdir: "LR" });
 
@@ -37,7 +40,9 @@ const nodeDefaults = {
   sourcePosition: Position.Right,
   targetPosition: Position.Left,
 };
-export function toReactFlowNode(wfn: WorkflowNodeProjection) {
+export function toReactFlowNode<NType extends { publicId: string }>(
+  wfn: NType,
+) {
   return {
     ...nodeDefaults,
     id: `${wfn.publicId}`,

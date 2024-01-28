@@ -74,11 +74,12 @@ export function LayoutFlow({
 
   const initialNodes: Array<Node<WorkflowNodeProjection>> =
     initialWorkflowNodes.map(toReactFlowNode);
-  const initialEdges = initialWorkflowEdges.map((wfe) => ({
-    id: wfe.publicId,
-    source: wfe.source,
-    target: wfe.target,
-  }));
+  const initialEdges: Array<Edge<WorkflowEdgeProjection>> =
+    initialWorkflowEdges.map((wfe) => ({
+      id: wfe.publicId,
+      source: wfe.source,
+      target: wfe.target,
+    }));
 
   const initialLayouted = useMemo(
     () => getLayoutedElements(initialNodes, initialEdges),

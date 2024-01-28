@@ -28,7 +28,7 @@ export interface RunNodeServiceMapping {
 export interface RunNodeDepStatus {
   nodeId: string;
   recordedStatus: "DEPLOYING" | "FAILED" | "SUCCESS";
-  recoredAt: Date;
+  recordedAt: Date;
 }
 
 export type RunStatus = "RUNNING" | "FAILED" | "COMPLETED";
@@ -50,10 +50,33 @@ export type RunServiceMapProjection = RunProjection["nodesServiceMappings"][0];
 export type RunDeploymentStatusProjection =
   RunProjection["nodeDeploymentStatuses"][0];
 
-export type RunNodesProjection = WorkflowProjection["nodes"][0];
-export type RunEdgesProjection = WorkflowProjection["edges"][0];
+export type RunNodeProjection = RunProjection["nodes"][0];
+export type RunEdgeProjection = RunProjection["edges"][0];
 
 export function runProjection(r: WorkflowRun) {
+  const nodesWithHistoryAndService = r.nodes.map((n) => {
+    const nodeHistory = r.nodeDeploymentStatuses
+      .filter((nds) => nds.nodeId === n.publicId)
+      .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime());
+
+    const serviceMapping = r.nodesServiceMappings.find(
+      (sm) => sm.nodeId === n.publicId,
+    );
+
+    return {
+      publicId: n.publicId,
+      name: n.name,
+      createdAt: n.createdAt,
+      updatedAt: n.updatedAt,
+      isRoot: n.isRoot,
+      isInput: n.isInput,
+      containerImage: n.containerImage,
+      variables: n.variables,
+      history: nodeHistory,
+      serviceMapping,
+    };
+  });
+
   return {
     publicId: r.publicId,
     workflowPublicId: r.workflowPublicId,
@@ -66,25 +89,16 @@ export function runProjection(r: WorkflowRun) {
     })),
     nodeDeploymentStatuses: r.nodeDeploymentStatuses.map((ds) => ({
       nodeId: ds.nodeId,
-      recoredAt: ds.recoredAt,
+      recordedAt: ds.recordedAt,
       recoredStatus: ds.recordedStatus,
     })),
-    nodes: r.nodes.map((n) => ({
-      publicId: n.publicId,
-      name: n.name,
-      createdAt: n.createdAt,
-      updatedAt: n.updatedAt,
-      isRoot: n.isRoot,
-      isInput: n.isInput,
-      containerImage: n.containerImage,
-      variables: n.variables,
-    })),
+    nodes: nodesWithHistoryAndService,
     edges: r.edges.map((e) => ({
       publicId: e.publicId,
       source: e.source,
       target: e.target,
     })),
-  };
+  } as const;
 }
 
 export type WorkflowNodeVariables = Array<{
@@ -131,7 +145,7 @@ export function workflowProjection(wf: Workflow) {
     updatedAt: wf.updatedAt,
     projectId: wf.projectId,
     name: wf.name,
-    apiKey: wf.apiKey,
+    apiKey: "", // wf.apiKey,
     isValidDag: isValidDag(wf.nodes, wf.edges),
     isRunnable: wf.nodes.every((n) => Boolean(n.containerImage)),
     nodes: wf.nodes.map((n) => ({
