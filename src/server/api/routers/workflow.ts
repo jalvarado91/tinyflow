@@ -166,6 +166,12 @@ export function workflowProjection(wf: Workflow) {
   } as const;
 }
 
+/**
+ * Creates a new workflow for onboarding
+ * @param db
+ * @param param1
+ * @returns
+ */
 async function createWorkflow(
   db: Db,
   {
@@ -254,41 +260,33 @@ async function createWorkflow(
 
   const collection = db.collection<Workflow>("workflow");
   const { insertedId } = await collection.insertOne(wf);
-  const nWf = await collection.findOne({
+  const newWorkflow = await collection.findOne({
     _id: insertedId,
   });
 
-  if (!nWf) {
+  if (!newWorkflow) {
     throw new Error(
       `Couldn't create workflow ${name} for project ${projectId}`,
     );
   }
 
-  const webhookUrl = `${env.PUBLIC_URL}/api/webhooks/railway/${nWf.publicId}`;
+  const webhookUrl = `${env.PUBLIC_URL}/api/webhooks/railway/${newWorkflow.publicId}`;
   const createWebhookRes = await createProjectWebhook(
-    nWf.apiKey,
-    nWf.projectId,
+    newWorkflow.apiKey,
+    newWorkflow.projectId,
     webhookUrl,
   );
 
   console.log({ webhookUrl, createWebhookRes });
 
-  return nWf;
+  return newWorkflow;
 }
 
-export async function getWorkFlow(db: Db, publicId: string) {
-  const collection = db.collection<Workflow>("workflow");
-  const nWf = await collection.findOne({
-    publicId: publicId,
-  });
-
-  if (!nWf) {
-    throw new Error(`Couldn't find workflow with publicId: ${publicId}`);
-  }
-
-  return nWf;
-}
-
+/**
+ * Gets the most recently created workflow. There should really only be one
+ * @param db
+ * @returns
+ */
 async function getLatestWorkflow(db: Db) {
   const collection = db.collection<Workflow>("workflow");
   const res = await collection
@@ -317,14 +315,20 @@ const updateWfNodeValuesSchema = z.object({
     .optional(),
 });
 type UpdateWfNodeValues = z.infer<typeof updateWfNodeValuesSchema>;
-
+/**
+ * Updates a workflwo node
+ * @param db
+ * @param nodeId
+ * @param values
+ * @returns
+ */
 async function updateWorkflowNode(
   db: Db,
   nodeId: string,
   values: UpdateWfNodeValues,
 ) {
   const collection = db.collection<Workflow>("workflow");
-  const findWfRes = await collection.findOne({
+  const workflow = await collection.findOne({
     nodes: {
       $elemMatch: {
         publicId: nodeId,
@@ -332,11 +336,10 @@ async function updateWorkflowNode(
     },
   });
 
-  if (!findWfRes) {
+  if (!workflow) {
     throw new Error(`Couldn't find workflow by node with id ${nodeId}`);
   }
 
-  const workflow = findWfRes;
   const relevantNode = workflow.nodes.find((n) => n.publicId === nodeId);
 
   if (!relevantNode) {
@@ -368,6 +371,13 @@ async function updateWorkflowNode(
   return newRelevantNode;
 }
 
+/**
+ * Create a new Task aka a new Node
+ * @param db
+ * @param workflowId
+ * @param type
+ * @returns
+ */
 async function createWorkflowNode(
   db: Db,
   workflowId: string,
@@ -412,9 +422,16 @@ async function createWorkflowNode(
   return newNode;
 }
 
+/**
+ * Connects two nodes. Resulting in a new edge
+ * @param db
+ * @param sourceId
+ * @param targetId
+ * @returns
+ */
 async function connectNodes(db: Db, sourceId: string, targetId: string) {
   const collection = db.collection<Workflow>("workflow");
-  const findWfRes = await collection.findOne({
+  const workflow = await collection.findOne({
     nodes: {
       $elemMatch: {
         publicId: sourceId,
@@ -422,11 +439,10 @@ async function connectNodes(db: Db, sourceId: string, targetId: string) {
     },
   });
 
-  if (!findWfRes) {
+  if (!workflow) {
     throw new Error(`Couldn't find workflow by node with id ${sourceId}`);
   }
 
-  const workflow = findWfRes;
   const existingEdge = workflow.edges.find(
     (e) => e.source === sourceId && e.target === targetId,
   );
@@ -457,6 +473,12 @@ async function connectNodes(db: Db, sourceId: string, targetId: string) {
   return edge;
 }
 
+/**
+ * Handles deleting a node. Removes relevant edges as well.
+ * @param db
+ * @param workflowId
+ * @param nodeIdsToDelete
+ */
 async function deleteNodes(
   db: Db,
   workflowId: string,
@@ -499,6 +521,13 @@ async function deleteNodes(
   );
 }
 
+/**
+ * Deletes edges
+ * @param db
+ * @param workflowId
+ * @param edgesToDelete
+ * @returns
+ */
 async function deleteEdges(
   db: Db,
   workflowId: string,
@@ -532,6 +561,142 @@ async function deleteEdges(
   );
 }
 
+/**
+ * Starts a workflow run.
+ *
+ * Gets the first leaves, validates DAG, validates all tasks
+ * have containers, creates railways serivces for them,
+ * and stores the state
+ * @param db
+ * @param workflowId
+ * @returns
+ */
+async function runWorkflow(db: Db, workflowId: string) {
+  const workflowCollection = db.collection<Workflow>("workflow");
+  const workflow = await workflowCollection.findOne({
+    publicId: workflowId,
+  });
+
+  if (!workflow) {
+    throw new Error(`Couldn't find workflow id ${workflowId}`);
+  }
+
+  const nodes = workflow.nodes;
+  const edges = workflow.edges;
+  const isDag = isValidDag(nodes, edges);
+  if (!isDag) {
+    throw new Error(
+      `Workflow can't be run because there are cycles, is not fully connected, or is missing an input`,
+    );
+  }
+
+  const nodesAreNunnable = nodes.every((n) => Boolean(n.containerImage));
+  if (!nodesAreNunnable) {
+    throw new Error(
+      `Workflow can't be run becase not all tasks have valid container images`,
+    );
+  }
+
+  const now = new Date();
+  const runId = workflowRunId();
+  const run = {
+    publicId: runId,
+    workflowId: workflow._id,
+    workflowPublicId: workflow.publicId,
+    startedAt: now,
+    updatedAt: now,
+    nodes: nodes,
+    edges: edges,
+    status: "RUNNING",
+    nodeDeploymentStatuses: [],
+    nodesServiceMappings: [] as RunNodeServiceMapping[],
+  } satisfies WorkflowRun;
+
+  /**
+   * Run input nodes
+   */
+  const inputNodes = run.nodes.filter((n) => n.isInput);
+  const res = await Promise.all(
+    inputNodes.map(async (n) => {
+      const createRes = await createService(
+        workflow.apiKey,
+        workflow.projectId,
+        `${n.name} ${now.getTime()}`,
+        n.containerImage!,
+        n.variables,
+      );
+
+      return {
+        nodeId: n.publicId,
+        railwayServiceId: createRes.serviceCreate.id,
+      } as const;
+    }),
+  );
+
+  const newMappings = res.map<RunNodeServiceMapping>((r) => ({
+    nodeId: r.nodeId,
+    railwayServiceId: r.railwayServiceId,
+  }));
+
+  const newNodeDepMap = [...run.nodesServiceMappings, ...newMappings];
+  run.nodesServiceMappings = newNodeDepMap;
+
+  console.log("runWorkflow", {
+    workflowRun: run,
+    res: res.map(
+      ({ nodeId, railwayServiceId }) => `${nodeId}: ${railwayServiceId} `,
+    ),
+  });
+
+  const runsCollection = db.collection<WorkflowRun>("runs");
+  const { acknowledged } = await runsCollection.insertOne(run);
+
+  if (!acknowledged) {
+    throw new Error(`Couldn't start run for workflow ${workflow.name}`);
+  }
+
+  return runId;
+}
+
+/**
+ * Asserts a given set of nodes and edges are a valid workflow DAG
+ * - Makes sure we have a root
+ * - Makes sure we have input nodes that are fully connected
+ * - Makes sure we have no cycles in the graph
+ * @param nodes
+ * @param edges
+ * @returns
+ */
+function isValidDag(nodes: WorkflowNode[], edges: WorkflowEdge[]) {
+  // has sink node (node with no outputs)
+  const hasSinkNode = nodes.some(
+    (n) =>
+      n.isRoot &&
+      edges.some((e) => n.publicId === e.source || n.publicId === e.target),
+  );
+
+  // has source node (node with no inputs)
+  const inputNodes = nodes.filter((n) => n.isInput);
+  const hasInputNodes = inputNodes.length > 0;
+
+  const inputNodesAreConnected = inputNodes.every((inputNode) =>
+    edges.some(
+      (e) => inputNode.publicId === e.source || inputNode.publicId === e.target,
+    ),
+  );
+
+  // has no cycles
+  const hasNoCycles = assertNoCycles(nodes, edges);
+
+  return hasNoCycles && hasInputNodes && inputNodesAreConnected && hasSinkNode;
+}
+
+/**
+ * Asserts given graph representation has no cycles
+ * @param nodes
+ * @param edges
+ * @returns
+ */
 function assertNoCycles(
   nodes: Array<WorkflowNode>,
   edges: Array<WorkflowEdge>,
@@ -575,119 +740,11 @@ function assertNoCycles(
   return true;
 }
 
-function isValidDag(nodes: WorkflowNode[], edges: WorkflowEdge[]) {
-  // has sink node (node with no outputs)
-  const hasSinkNode = nodes.some(
-    (n) =>
-      n.isRoot &&
-      edges.some((e) => n.publicId === e.source || n.publicId === e.target),
-  );
-
-  // has source node (node with no inputs)
-  const inputNodes = nodes.filter((n) => n.isInput);
-  const hasInputNodes = inputNodes.length > 0;
-
-  const inputNodesAreConnected = inputNodes.every((inputNode) =>
-    edges.some(
-      (e) => inputNode.publicId === e.source || inputNode.publicId === e.target,
-    ),
-  );
-
-  // has no cycles
-  const hasNoCycles = assertNoCycles(nodes, edges);
-
-  return hasNoCycles && hasInputNodes && inputNodesAreConnected && hasSinkNode;
-}
-
-async function runWorkflow(db: Db, workflowId: string) {
-  const workflowCollection = db.collection<Workflow>("workflow");
-  const findWfRes = await workflowCollection.findOne({
-    publicId: workflowId,
-  });
-
-  if (!findWfRes) {
-    throw new Error(`Couldn't find workflow id ${workflowId}`);
-  }
-
-  const workflow = findWfRes;
-
-  const nodes = workflow.nodes;
-  const edges = workflow.edges;
-  const isDag = isValidDag(nodes, edges);
-  if (!isDag) {
-    throw new Error(
-      `Workflow can't be run because there are cycles, is not fully connected, or is missing an input`,
-    );
-  }
-
-  const nodesAreNunnable = nodes.every((n) => Boolean(n.containerImage));
-  if (!nodesAreNunnable) {
-    throw new Error(
-      `Workflow can't be run becase not all tasks have valid container images`,
-    );
-  }
-
-  console.log("Workflow is executable. Now to running it.");
-
-  const now = new Date();
-  const runId = workflowRunId();
-  const run = {
-    publicId: runId,
-    workflowId: workflow._id,
-    workflowPublicId: workflow.publicId,
-    startedAt: now,
-    updatedAt: now,
-    nodes: nodes,
-    edges: edges,
-    status: "RUNNING",
-    nodeDeploymentStatuses: [],
-    nodesServiceMappings: [] as RunNodeServiceMapping[],
-  } satisfies WorkflowRun;
-
-  const inputNodes = run.nodes.filter((n) => n.isInput);
-
-  const res = await Promise.all(
-    inputNodes.map(async (n) => {
-      const createRes = await createService(
-        workflow.apiKey,
-        workflow.projectId,
-        `${n.name} ${now.getTime()}`,
-        n.containerImage!,
-        n.variables,
-      );
-
-      return {
-        nodeId: n.publicId,
-        railwayServiceId: createRes.serviceCreate.id,
-      } as const;
-    }),
-  );
-
-  const newMappings = res.map<RunNodeServiceMapping>((r) => ({
-    nodeId: r.nodeId,
-    railwayServiceId: r.railwayServiceId,
-  }));
-
-  const newNodeDepMap = [...run.nodesServiceMappings, ...newMappings];
-  run.nodesServiceMappings = newNodeDepMap;
-
-  console.log("runWorkflow", {
-    workflowRun: run,
-    res: res.map(
-      ({ nodeId, railwayServiceId }) => `${nodeId}: ${railwayServiceId} `,
-    ),
-  });
-
-  const runsCollection = db.collection<WorkflowRun>("runs");
-  const { acknowledged } = await runsCollection.insertOne(run);
-
-  if (!acknowledged) {
-    throw new Error(`Couldn't start run for workflow ${workflow.name}`);
-  }
-
-  return runId;
-}
-
+/**
+ * Gets latest runs
+ * @param db
+ * @returns
+ */
 async function getLatestRuns(db: Db) {
   const collection = db.collection<WorkflowRun>("runs");
   const res = await collection
@@ -699,6 +756,9 @@ async function getLatestRuns(db: Db) {
   return res;
 }
 
+/**
+ * The Main Workflow tRPC router
+ */
 export const workflowRouter = createTRPCRouter({
   create: publicProcedure
     .input(
@@ -736,12 +796,6 @@ export const workflowRouter = createTRPCRouter({
       const values = input.values;
 
       return await updateWorkflowNode(ctx.db, id, values);
-    }),
-  getByPublicId: publicProcedure
-    .input(z.object({ publicId: z.string() }))
-    .query(async ({ input, ctx }) => {
-      const wf = await getWorkFlow(ctx.db, input.publicId);
-      return workflowProjection(wf);
     }),
   getLatest: publicProcedure.query(async ({ ctx }) => {
     const wf = await getLatestWorkflow(ctx.db);

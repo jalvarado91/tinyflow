@@ -20,7 +20,7 @@ import { AlertTriangle, Box } from "lucide-react";
 import { Label } from "~/components/ui/label";
 import { ClientDateTime } from "./client-datetime";
 
-function RunNodeViewer({ data, selected, id }: NodeProps<RunNodeProjection>) {
+function RunNodeViewer({ data, selected }: NodeProps<RunNodeProjection>) {
   const isRoot = data.isRoot;
   const isInput = data.isInput;
 

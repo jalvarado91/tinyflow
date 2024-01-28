@@ -1,8 +1,4 @@
 import Dagre from "@dagrejs/dagre";
-import {
-  type WorkflowEdgeProjection,
-  type WorkflowNodeProjection,
-} from "~/server/api/routers/workflow";
 import { Position, type Edge, type Node } from "reactflow";
 
 const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));

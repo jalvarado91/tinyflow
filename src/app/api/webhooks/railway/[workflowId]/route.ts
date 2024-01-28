@@ -55,7 +55,6 @@ async function recordDeploymentEvent(
 
   const relevantNodeId = relevantNodeMapping.nodeId;
   const now = new Date();
-
   const newNodeDepStatus = {
     nodeId: relevantNodeId,
     recordedStatus: payload.status,
@@ -66,7 +65,6 @@ async function recordDeploymentEvent(
   run.nodeDeploymentStatuses = newStatuses;
 
   const nodesToRun = getNextNodesToRun(run, newNodeDepStatus);
-
   console.log("nodesToRun:", nodesToRun);
 
   if (nodesToRun.length === 0) {
@@ -194,14 +192,6 @@ function getNextNodesToRun(
       (status) => status.nodeId,
     );
 
-    console.log("getNextNodesToRun currentStatus", currentStatus);
-    console.log(
-      "getNextNodesToRun outgoing edges",
-      edgesWhereCurrentNodeIsSource,
-    );
-    console.log("getNextNodesToRun completedNodes", completedNodes);
-    console.log("getNextNodesToRun ranNodes", ranNodes);
-
     edgesWhereCurrentNodeIsSource.forEach((edge) => {
       const nodeCandidate = workflowRun.nodes.find(
         (n) => n.publicId === edge.target,
@@ -215,8 +205,6 @@ function getNextNodesToRun(
       const edgesIntoCandidate = workflowRun.edges.filter(
         (e) => e.target === nodeCandidate.publicId,
       );
-
-      console.log("edgesIntoCandidate", edgesIntoCandidate);
 
       const allIncomingCompleted = edgesIntoCandidate.every((e) =>
         completedNodes.includes(e.source),
