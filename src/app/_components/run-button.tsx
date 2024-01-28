@@ -54,7 +54,7 @@ export function RunButton({ workflow }: { workflow: WorkflowProjection }) {
       </Button>
       {!workflow.isValidDag && (
         <div className="text-xs font-semibold text-red-500">
-          Workflow either has cycles or is not fully connected
+          Workflow either has cycles, is not fully connected, or is missing an input
         </div>
       )}
       {!workflow.isRunnable && (

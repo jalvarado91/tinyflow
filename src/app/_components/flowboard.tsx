@@ -14,6 +14,8 @@ import ReactFlow, {
   type Edge,
   type Connection,
   type Node,
+  EdgeChange,
+  NodeChange,
 } from "reactflow";
 import Dagre from "@dagrejs/dagre";
 
@@ -30,7 +32,7 @@ import { type AppRouter } from "~/server/api/root";
 import { ToastAction } from "~/components/ui/toast";
 import { useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
-import { CircleDot, StarsIcon } from "lucide-react";
+import { CircleDot, Loader2, LoaderIcon, StarsIcon } from "lucide-react";
 
 const nodeDefaults = {
   sourcePosition: Position.Right,
@@ -126,7 +128,10 @@ export function LayoutFlow({
     [initialEdges, initialNodes],
   );
 
-  const { fitView } = useReactFlow();
+  const { fitView, getNode } = useReactFlow<
+    WorkflowNodeProjection,
+    WorkflowEdgeProjection
+  >();
   const [nodes, setNodes, onNodesChange] =
     useNodesState<WorkflowNodeProjection>(initialLayouted.nodes);
   const [edges, setEdges, onEdgesChange] =
@@ -144,7 +149,7 @@ export function LayoutFlow({
       toast({
         variant: "destructive",
         title: "Oh no! Couldn't save your changes",
-        description: `${err.message}. Please try again.`,
+        description: `${err.message}. Please refresh and try again.`,
         action: (
           <ToastAction
             onClick={() => window.location.reload()}
@@ -166,7 +171,29 @@ export function LayoutFlow({
       toast({
         variant: "destructive",
         title: "Oh no! Couldn't save your changes",
-        description: `${err.message}. Please try again.`,
+        description: `${err.message}. Please refresh and try again.`,
+        action: (
+          <ToastAction
+            onClick={() => window.location.reload()}
+            altText={"Try again"}
+          >
+            Refresh
+          </ToastAction>
+        ),
+      });
+      router.refresh();
+    },
+  });
+
+  const deleteNodes = api.workflow.deleteNodes.useMutation({
+    onSuccess: () => {
+      router.refresh();
+    },
+    onError: (err: TRPCClientErrorLike<AppRouter>) => {
+      toast({
+        variant: "destructive",
+        title: "Oh no! Couldn't save your changes",
+        description: `${err.message}. Please refresh and try again.`,
         action: (
           <ToastAction
             onClick={() => window.location.reload()}
@@ -202,7 +229,7 @@ export function LayoutFlow({
       toast({
         variant: "destructive",
         title: "Oh no! Couldn't save your changes",
-        description: `${err.message}. Please try again.`,
+        description: `${err.message}. Please refresh and try again.`,
         action: (
           <ToastAction
             onClick={() => window.location.reload()}
@@ -229,6 +256,36 @@ export function LayoutFlow({
     });
   }
 
+  function onNodesDelete(nodes: Node<WorkflowNodeProjection>[]) {
+    const notRoots = nodes.filter((n) => !n.data.isRoot);
+
+    deleteNodes.mutate({
+      workflowId: workflowId,
+      nodes: notRoots.map((n) => n.data.publicId),
+    });
+  }
+
+  function shouldNodeBeRemoved(node: Node<WorkflowNodeProjection>) {
+    return !node.data.isRoot;
+  }
+
+  function handleNodeChanges(changes: NodeChange[]) {
+    const nextChanges = changes.reduce((acc, change) => {
+      if (change.type === "remove") {
+        const node = getNode(change.id);
+
+        if (node && shouldNodeBeRemoved(node)) {
+          return [...acc, change];
+        }
+
+        return acc;
+      }
+
+      return [...acc, change];
+    }, [] as NodeChange[]);
+    onNodesChange(nextChanges);
+  }
+
   const onLayout = useCallback(() => {
     const layouted = getLayoutedElements(nodes, edges);
 
@@ -249,20 +306,35 @@ export function LayoutFlow({
     [createNode, workflowId],
   );
 
+  const isSaving =
+    connectNodes.isLoading ||
+    deleteEdge.isLoading ||
+    createNode.isLoading ||
+    deleteNodes.isLoading;
+
   return (
     <ReactFlow
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
+      onNodesDelete={onNodesDelete}
+      onNodesChange={handleNodeChanges}
+      onEdgesChange={(c) => (isSaving ? () => void {} : onEdgesChange(c))}
       proOptions={{ hideAttribution: true }}
-      onConnect={onConnect}
-      onEdgesDelete={onEdgesDelete}
+      onConnect={(c) => (isSaving ? () => void {} : onConnect(c))}
+      onEdgesDelete={(c) => (isSaving ? () => void {} : onEdgesDelete(c))}
       onLoad={onLayout}
       fitView
       className="bg-white"
     >
+      {isSaving && (
+        <Panel position="top-right" className="animate-in fade-in">
+          <div className="flex items-center gap-2 rounded border bg-white px-3 py-2 text-sm">
+            <Loader2 className="animate-spin" size={18} />
+            Saving changes
+          </div>
+        </Panel>
+      )}
       <Panel position="top-left" className="flex gap-2">
         <Button
           variant={"outline"}

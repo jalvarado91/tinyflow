@@ -5,7 +5,7 @@ import {
   type WorkflowRun,
   type Workflow,
   type RunNodeServiceMapping,
-  RunStatus,
+  type RunStatus,
 } from "~/server/api/routers/workflow";
 import { createDbConnection } from "~/server/db/db";
 import { createService } from "~/server/railway-client";

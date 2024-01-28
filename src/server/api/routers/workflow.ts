@@ -409,21 +409,64 @@ async function connectNodes(db: Db, sourceId: string, targetId: string) {
   return edge;
 }
 
+async function deleteNodes(
+  db: Db,
+  workflowId: string,
+  nodeIdsToDelete: string[],
+) {
+  const collection = db.collection<Workflow>("workflow");
+  const workflow = await collection.findOne({
+    publicId: workflowId,
+  });
+
+  if (!workflow) {
+    throw new Error(`Couldn't find workflow with id ${workflowId}`);
+  }
+
+  const edgesIdsToDelete = workflow.edges
+    .filter(
+      (e) =>
+        nodeIdsToDelete.includes(e.source) ||
+        nodeIdsToDelete.includes(e.target),
+    )
+    .map((e) => e.publicId);
+
+  const updatedEdges = workflow.edges.filter(
+    (e) => !edgesIdsToDelete.includes(e.publicId),
+  );
+  const updatedNodes = workflow.nodes.filter(
+    (n) => !nodeIdsToDelete.includes(n.publicId),
+  );
+
+  const now = new Date();
+  await collection.updateOne(
+    { _id: workflow._id },
+    {
+      $set: {
+        nodes: updatedNodes,
+        edges: updatedEdges,
+        updatedAt: now,
+      },
+    },
+  );
+}
+
 async function deleteEdge(db: Db, sourceId: string, targetId: string) {
   const collection = db.collection<Workflow>("workflow");
-  const findWfRes = await collection.findOne({
-    nodes: {
+  const workflow = await collection.findOne({
+    edges: {
       $elemMatch: {
-        publicId: sourceId,
+        source: sourceId,
+        target: targetId,
       },
     },
   });
 
-  if (!findWfRes) {
-    throw new Error(`Couldn't find workflow by node with id ${sourceId}`);
+  if (!workflow) {
+    return;
+    // throw new Error(`Couldn't find workflow by node with id ${sourceId}`);
   }
 
-  const workflow = findWfRes;
   const edgeToDelete = workflow.edges.find(
     (e) => e.source === sourceId && e.target === targetId,
   );
@@ -459,7 +502,7 @@ function assertNoCycles(
     adjacencyList[node.publicId] = [];
   });
   edges.forEach((edge) => {
-    adjacencyList[edge.source]!.push(edge.target);
+    adjacencyList[edge.source]?.push(edge.target);
   });
 
   const visited: Record<string, boolean> = {};
@@ -500,16 +543,19 @@ function isValidDag(nodes: WorkflowNode[], edges: WorkflowEdge[]) {
   );
 
   // has source node (node with no inputs)
-  const hasSourceNode = nodes.some(
-    (n) =>
-      n.isInput &&
-      edges.some((e) => n.publicId === e.source || n.publicId === e.target),
+  const inputNodes = nodes.filter((n) => n.isInput);
+  const hasInputNodes = inputNodes.length > 0;
+
+  const inputNodesAreConnected = inputNodes.every((inputNode) =>
+    edges.some(
+      (e) => inputNode.publicId === e.source || inputNode.publicId === e.target,
+    ),
   );
 
   // has no cycles
   const hasNoCycles = assertNoCycles(nodes, edges);
 
-  return hasNoCycles && hasSourceNode && hasSinkNode;
+  return hasNoCycles && hasInputNodes && inputNodesAreConnected && hasSinkNode;
 }
 
 async function runWorkflow(db: Db, workflowId: string) {
@@ -528,7 +574,9 @@ async function runWorkflow(db: Db, workflowId: string) {
   const edges = workflow.edges;
   const isDag = isValidDag(nodes, edges);
   if (!isDag) {
-    throw new Error(`Workflow can't be run because there are cycles`);
+    throw new Error(
+      `Workflow can't be run because there are cycles, is not fully connected, or is missing an input`,
+    );
   }
 
   const nodesAreNunnable = nodes.every((n) => Boolean(n.containerImage));
@@ -678,6 +726,16 @@ export const workflowRouter = createTRPCRouter({
     .input(z.object({ sourceId: z.string(), targetId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return await deleteEdge(ctx.db, input.sourceId, input.targetId);
+    }),
+  deleteNodes: publicProcedure
+    .input(
+      z.object({
+        workflowId: z.string(),
+        nodes: z.array(z.string()),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return await deleteNodes(ctx.db, input.workflowId, input.nodes);
     }),
   run: publicProcedure
     .input(z.object({ workflowId: z.string() }))
