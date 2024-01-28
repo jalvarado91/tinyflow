@@ -5,6 +5,7 @@ import { FlowBoard } from "./_components/flowboard";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { RunButton } from "./_components/run-button";
 import { formatDistance } from "date-fns";
+import { ActiveRunRefresher } from "./_components/run-refresher";
 
 export default async function Home() {
   noStore();
@@ -36,6 +37,7 @@ async function WorkflowView() {
 
   return (
     <main className="flex h-full min-h-screen w-screen bg-white">
+      <ActiveRunRefresher runs={runsData.runs} />
       <div className="z-10 grid h-full max-w-md flex-1 flex-shrink-0 grid-cols-1 grid-rows-[auto_minmax(0px,_1fr)] shadow-md">
         <div className="b flex-grow-0 flex-col border-x px-4 py-4">
           <h2 className="text-xl font-semibold">{wf.name}</h2>
