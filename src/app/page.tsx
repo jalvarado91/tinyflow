@@ -5,7 +5,9 @@ import { FlowBoard } from "./_components/flowboard";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { RunButton } from "./_components/run-button";
 import { formatDistance } from "date-fns";
-import { ActiveRunRefresher } from "./_components/run-refresher";
+import { ActiveRunsRefresher } from "./_components/run-refresher";
+import Link from "next/link";
+import { cn } from "~/lib/utils";
 
 export default async function Home() {
   noStore();
@@ -37,10 +39,10 @@ async function WorkflowView() {
 
   return (
     <main className="flex h-full min-h-screen w-screen bg-white">
-      <ActiveRunRefresher runs={runsData.runs} />
+      <ActiveRunsRefresher runs={runsData.runs} />
       <div className="z-10 grid h-full max-w-md flex-1 flex-shrink-0 grid-cols-1 grid-rows-[auto_minmax(0px,_1fr)] shadow-md">
         <div className="b flex-grow-0 flex-col border-x px-4 py-4">
-          <h2 className="text-xl font-semibold">{wf.name}</h2>
+          <h2 className="text-2xl font-semibold">{wf.name}</h2>
           <p className="text-sm text-muted-foreground">
             Edit or run your workflow
           </p>
@@ -50,7 +52,7 @@ async function WorkflowView() {
             RUN HISTORY {runsData.total > 0 ? <>({runsData.total})</> : ""}
           </h2>
           <ScrollArea className="h-full max-h-full overflow-hidden">
-            <div className="flex h-full flex-col justify-start gap-2 px-4 pb-4">
+            <div className="my-2 flex h-full flex-col justify-start gap-2 px-4 pb-4">
               {runsData.total === 0 && (
                 <div className="rounded-lg border bg-slate-50 px-4 py-4 text-center font-semibold">
                   No runs so far
@@ -58,32 +60,39 @@ async function WorkflowView() {
               )}
               {runsData.runs.map((r) => {
                 return (
-                  <div
+                  <Link
+                    href={`/run/${r.publicId}`}
                     key={r.publicId}
                     title={JSON.stringify(r, null, 2)}
-                    className="rounded-lg border px-4 py-4"
+                    className={cn(
+                      "rounded-lg border px-4 py-4 hover:outline focus-visible:outline",
+                      r.status === "FAILED" &&
+                        "border-2 border-red-600/10 bg-red-50 text-red-700",
+                      r.status === "COMPLETED" &&
+                        "bg-sky-50 text-sky-700  ring-sky-600/20",
+                    )}
                   >
                     <div className="font-semibold">{r.status}</div>
-                    <div className="text-sm text-slate-700">
+                    <div className="text-sm">
                       Kicked off{" "}
-                      <span className="font-semibold text-slate-800">
+                      <span className="font-semibold">
                         {formatDistance(r.startedAt, now, {
                           addSuffix: true,
                         })}
                       </span>
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
           </ScrollArea>
         </div>
         <div className="flex flex-col border-x">
-          <div className="flex-shrink-0 bg-slate-50 py-4 shadow-inner">
+          {/* <div className="flex-shrink-0 bg-slate-50 py-4 shadow-inner">
             <pre className="mx-4 max-h-[600px] overflow-x-auto overflow-y-auto text-xs">
               {JSON.stringify(wf, null, 2)}
             </pre>
-          </div>
+          </div> */}
           <div className="flex-shrink-0 justify-self-end px-4 py-4">
             <RunButton workflow={wf} />
           </div>

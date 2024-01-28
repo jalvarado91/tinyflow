@@ -13,8 +13,9 @@ export function RunButton({ workflow }: { workflow: WorkflowProjection }) {
   const router = useRouter();
 
   const runWorkflow = api.workflow.run.useMutation({
-    onSuccess: () => {
+    onSuccess: (runId) => {
       router.refresh();
+      router.push(`/run/${runId}`);
       console.log("On success");
     },
     onError: (err: TRPCClientErrorLike<AppRouter>) => {
@@ -50,11 +51,12 @@ export function RunButton({ workflow }: { workflow: WorkflowProjection }) {
         }
         className="w-full"
       >
-        {runWorkflow.isLoading ? "Running..." : "Run"}
+        {runWorkflow.isLoading ? "Starting run..." : "Start a run"}
       </Button>
       {!workflow.isValidDag && (
         <div className="text-xs font-semibold text-red-500">
-          Workflow either has cycles, is not fully connected, or is missing an input
+          Workflow either has cycles, is not fully connected, or is missing an
+          input
         </div>
       )}
       {!workflow.isRunnable && (
