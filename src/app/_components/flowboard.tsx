@@ -14,8 +14,7 @@ import ReactFlow, {
   type Edge,
   type Connection,
   type Node,
-  EdgeChange,
-  NodeChange,
+  type NodeChange,
 } from "reactflow";
 import Dagre from "@dagrejs/dagre";
 
@@ -32,7 +31,7 @@ import { type AppRouter } from "~/server/api/root";
 import { ToastAction } from "~/components/ui/toast";
 import { useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
-import { CircleDot, Loader2, LoaderIcon, StarsIcon } from "lucide-react";
+import { CircleDot, Loader2, StarsIcon } from "lucide-react";
 
 const nodeDefaults = {
   sourcePosition: Position.Right,
@@ -221,7 +220,7 @@ export function LayoutFlow({
     [connectNodes, setEdges],
   );
 
-  const deleteEdge = api.workflow.deleteEdge.useMutation({
+  const deleteEdges = api.workflow.deleteEdges.useMutation({
     onSuccess: () => {
       router.refresh();
     },
@@ -244,15 +243,12 @@ export function LayoutFlow({
   });
 
   function onEdgesDelete(edges: Edge[]) {
-    // Let's just assume only editing one for now
-    const edge = edges[0];
-    if (!edge) {
-      return;
-    }
-
-    deleteEdge.mutate({
-      sourceId: edge.source,
-      targetId: edge.target,
+    deleteEdges.mutate({
+      workflowId: workflowId,
+      edges: edges.map((e) => ({
+        sourceId: e.source,
+        targetId: e.target,
+      })),
     });
   }
 
@@ -308,7 +304,7 @@ export function LayoutFlow({
 
   const isSaving =
     connectNodes.isLoading ||
-    deleteEdge.isLoading ||
+    deleteEdges.isLoading ||
     createNode.isLoading ||
     deleteNodes.isLoading;
 

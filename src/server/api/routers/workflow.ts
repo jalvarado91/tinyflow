@@ -451,35 +451,28 @@ async function deleteNodes(
   );
 }
 
-async function deleteEdge(db: Db, sourceId: string, targetId: string) {
+async function deleteEdges(
+  db: Db,
+  workflowId: string,
+  edgesToDelete: Array<{ sourceId: string; targetId: string }>,
+) {
   const collection = db.collection<Workflow>("workflow");
   const workflow = await collection.findOne({
-    edges: {
-      $elemMatch: {
-        source: sourceId,
-        target: targetId,
-      },
-    },
+    publicId: workflowId,
   });
 
   if (!workflow) {
     return;
-    // throw new Error(`Couldn't find workflow by node with id ${sourceId}`);
   }
 
-  const edgeToDelete = workflow.edges.find(
-    (e) => e.source === sourceId && e.target === targetId,
+  const updatedEdges = workflow.edges.filter(
+    (e) =>
+      !edgesToDelete.some(
+        (etd) => etd.sourceId === e.source && etd.targetId === e.target,
+      ),
   );
-
-  if (!edgeToDelete) {
-    return;
-  }
 
   const now = new Date();
-  const updatedEdges = workflow.edges.filter(
-    (e) => e.publicId !== edgeToDelete.publicId,
-  );
-
   await collection.updateOne(
     { _id: workflow._id },
     {
@@ -722,10 +715,17 @@ export const workflowRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       return await connectNodes(ctx.db, input.sourceId, input.targetId);
     }),
-  deleteEdge: publicProcedure
-    .input(z.object({ sourceId: z.string(), targetId: z.string() }))
+  deleteEdges: publicProcedure
+    .input(
+      z.object({
+        workflowId: z.string(),
+        edges: z.array(
+          z.object({ sourceId: z.string(), targetId: z.string() }),
+        ),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
-      return await deleteEdge(ctx.db, input.sourceId, input.targetId);
+      return await deleteEdges(ctx.db, input.workflowId, input.edges);
     }),
   deleteNodes: publicProcedure
     .input(
