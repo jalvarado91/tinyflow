@@ -234,7 +234,9 @@ export async function POST(
     console.log(
       `Correctly ignored event ${payload.status} for service ${payload.service.id}`,
     );
-    return;
+    return new Response("Ignored irrelevant.", {
+      status: 200,
+    });
   }
 
   const db = await createDbConnection();
