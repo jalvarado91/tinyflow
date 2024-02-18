@@ -1,6 +1,6 @@
 # TinyFlow 
 
-Hello 👋! TinyFlow is a tiny distributed workflow implementation. It lets you create a DAG of tasks which can only start once all dependecies have completed successfully. 
+TinyFlow is a tiny distributed workflow implementation built on top of [Railway's](https://railway.app/) API. It lets you create a DAG of tasks which can only start once all dependecies have completed successfully. 
 
 Tasks are simply containers that run a process and exit when completed successfully. 
 
@@ -13,7 +13,7 @@ In your railway project you'll need a MongoDb service running. That's the only d
 
 TinyFlow can live in the same project where the resources will be deployed to, or it can reference a different project. At this time, a TinyFlow deployment only supports one project, so I recommend putting in in the same railway project where the resources will be.
 
-You can also try my instance at https://tinyflow.up.railway.app
+You can also try my instance at https://tinyflow.up.railway.app (if I haven't shut it down)
 
 ### Local Usage
 The steps are similar as above. You'll need a MongoDB URL string, and you'll need something like ngrok to listen to webhook notifications from railway. Check the `.env.example` file for the variable names. 
